@@ -20,14 +20,14 @@ public:
     uint8_t  SR;             //Status Register
 
     enum FLAGS : uint8_t{
-        C = 1,
-        Z = 2,
-        I = 4,
-        D = 8,
-        B = 16,
+        C       = 1,
+        Z       = 2,
+        I       = 4,
+        D       = 8,
+        B       = 16,
         IGNORED = 32,
-        V = 64,
-        N = 128
+        V       = 64,
+        N       = 128
     };
 
     uint16_t stack[32];
