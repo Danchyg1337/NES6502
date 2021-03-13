@@ -58,25 +58,25 @@ public:
         uint8_t value = Fetch();
         A = value;
         SR = (SR & ~FLAGS::Z) | (FLAGS::Z * !(bool)A);
-        SR = (SR & ~FLAGS::N) | (FLAGS::N * (A >> 7));
+        SR = (SR & ~FLAGS::N) | (FLAGS::N & A);
         std::cout<<"LDA\n";
     }
 
     void TAX() {
         X = A;
         SR = (SR & ~FLAGS::Z) | (FLAGS::Z * !(bool)X);
-        SR = (SR & ~FLAGS::N) | (FLAGS::N * (X >> 7));
+        SR = (SR & ~FLAGS::N) | (FLAGS::N & X);
         std::cout << "TAX\n";
     }
 
     void INX() {
         X++;
         SR = (SR & ~FLAGS::Z) | (FLAGS::Z * !(bool)X);
-        SR = (SR & ~FLAGS::N) | (FLAGS::N * (X >> 7));
+        SR = (SR & ~FLAGS::N) | (FLAGS::N & X);
         std::cout << "INX\n";
     }
 
-    void BRK() {
+    void BRK() {                                        //not completed
         stack[SP] = PC;
         SR = (SR | FLAGS::B);
         std::cout << "BRK\n";
