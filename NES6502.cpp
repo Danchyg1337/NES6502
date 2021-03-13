@@ -76,17 +76,23 @@ public:
         std::cout << "INX\n";
     }
 
+    void BRK() {
+        stack[SP] = PC;
+        SR = (SR | FLAGS::B);
+        std::cout << "BRK\n";
+    }
+
 private:
     std::unordered_map<uint8_t, void (CPU::*)()> instructions = {
         {0xA9, &CPU::LDA},
         {0xAA, &CPU::TAX},
-        {0xE8, &CPU::INX}
+        {0xE8, &CPU::INX},
+        {0x00, &CPU::BRK}
     };
 
 };
 
 void ShowCPU(CPU& cpu) {
-    #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
     #define BYTE_TO_BINARY(byte)  \
         (byte & 0x80 ? '1' : '0'), \
         (byte & 0x40 ? '1' : '0'), \
