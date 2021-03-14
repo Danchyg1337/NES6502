@@ -3,6 +3,9 @@
 #include <vector>
 #include <unordered_map>
 
+#define OLC_PGE_APPLICATION
+#include "olcPixelGameEngine.h"
+
 class CPU {
 public:
     CPU(uint8_t* program, size_t size) {
@@ -128,17 +131,41 @@ private:
 
 };
 
+
+
+class NES : public olc::PixelGameEngine
+{
+public:
+    NES()
+    {
+        sAppName = "NES";
+    }
+
+public:
+    bool OnUserCreate() override
+    {
+        std::ifstream file;
+        file.open("test1.6502", std::ifstream::binary);
+        std::vector<uint8_t> program(std::istreambuf_iterator<char>(file), {});
+        CPU CPU6502(&program[0], program.size());
+        CPU6502.Run();
+        return true;
+    }
+
+    bool OnUserUpdate(float fElapsedTime) override
+    {
+        
+        for (int x = 0; x < ScreenWidth(); x++)
+            for (int y = 0; y < ScreenHeight(); y++)
+                Draw(x, y, olc::Pixel(rand() % 255, rand() % 255, rand() % 255));
+        return true;
+    }
+};
+
+
 int main()
 {
-    std::ifstream file;
-    file.open("test1.6502", std::ifstream::binary);
-    std::vector<uint8_t> saved(std::istreambuf_iterator<char>(file), {});
-    uint8_t* program = new uint8_t[saved.size()];
-    for (int cnt = 0; cnt < saved.size(); cnt++) program[cnt] = saved[cnt];
-
-    CPU CPU6502(program, saved.size());
-
-    CPU6502.Run();
-    saved.clear();
-    
+    NES nes;
+    if (nes.Construct(256, 240, 4, 4))
+        nes.Start();
 }
