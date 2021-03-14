@@ -5,12 +5,13 @@
 
 class CPU {
 public:
-    CPU(uint8_t* memory) {
-        this->memory = memory;
+    CPU(uint8_t* program, size_t size) {
         Reset();
+        memory = new uint8_t[2048 * 32];
+        memcpy(&memory[PC], program, size);
     }
 
-    uint8_t* memory;         //Program Memory
+    uint8_t* memory;
 
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register
@@ -30,12 +31,10 @@ public:
         N       = 128
     };
 
-    uint16_t stack[32];
-
     void Reset() {
         SP = 0x01FF;
-        PC = 0x0;
-        SR = FLAGS::IGNORED | FLAGS::B;
+        PC = 0x8000;
+        SR = FLAGS::IGNORED;
     }
 
     uint8_t Fetch() {
@@ -44,14 +43,21 @@ public:
         return fetched;
     }
 
+    void Run() {
+        while (!(SR & FLAGS::B)) {
+            Call();
+            Show();
+        }
+    }
+
     void Call() {
         uint8_t command = Fetch();
-        if (instructions.find(command) == instructions.end()) InvalidCommand();
+        if (instructions.find(command) == instructions.end()) InvalidCommand(command);
         else (this->*instructions[command])();
     }
 
-    void InvalidCommand() {
-        std::cout << "Invalid command\n";
+    void InvalidCommand(uint8_t code) {
+        printf("Invalid command : %02X\n", code);
     }
 
     void LDA(){
@@ -77,23 +83,21 @@ public:
     }
 
     void BRK() {                                        //not completed
-        stack[SP] = PC;
+        memory[SP] = PC;
         SR = (SR | FLAGS::B);
         std::cout << "BRK\n";
     }
 
-private:
-    std::unordered_map<uint8_t, void (CPU::*)()> instructions = {
-        {0xA9, &CPU::LDA},
-        {0xAA, &CPU::TAX},
-        {0xE8, &CPU::INX},
-        {0x00, &CPU::BRK}
-    };
+    void ADC() {                                        //not compeled
+        uint8_t value = Fetch();
+        uint8_t edge = std::min(A, value);
+        A = A + value + (SR & FLAGS::C);
+        SR = (SR & ~FLAGS::C) | (A < edge);
+        std::cout << "ADC\n";
+    }
 
-};
-
-void ShowCPU(CPU& cpu) {
-    #define BYTE_TO_BINARY(byte)  \
+    void Show() {
+        #define BYTE_TO_BINARY(byte)  \
         (byte & 0x80 ? '1' : '0'), \
         (byte & 0x40 ? '1' : '0'), \
         (byte & 0x20 ? '1' : '0'), \
@@ -103,8 +107,26 @@ void ShowCPU(CPU& cpu) {
         (byte & 0x02 ? '1' : '0'), \
         (byte & 0x01 ? '1' : '0')
 
-    printf("SR %c%c%c%c%c%c%c%c\n", BYTE_TO_BINARY(cpu.SR));
-}
+        //system("cls");
+        printf("SR %c%c%c%c%c%c%c%c\n", BYTE_TO_BINARY(this->SR));
+        printf("A %02X\n", this->A);
+        printf("X %02X\n", this->X);
+        printf("Y %02X\n", this->Y);
+        printf("PC %04X\n", this->PC);
+        printf("SP %04X\n", this->SP);
+
+    }
+
+private:
+    std::unordered_map<uint8_t, void (CPU::*)()> instructions = {
+        {0xA9, &CPU::LDA},
+        {0xAA, &CPU::TAX},
+        {0xE8, &CPU::INX},
+        {0x00, &CPU::BRK},
+        {0x69, &CPU::ADC}
+    };
+
+};
 
 int main()
 {
@@ -114,10 +136,9 @@ int main()
     uint8_t* program = new uint8_t[saved.size()];
     for (int cnt = 0; cnt < saved.size(); cnt++) program[cnt] = saved[cnt];
 
-    CPU CPU6502(program);
+    CPU CPU6502(program, saved.size());
 
-    for (auto a : saved) CPU6502.Call();
-    ShowCPU(CPU6502);
+    CPU6502.Run();
     saved.clear();
     
 }
