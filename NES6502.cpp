@@ -11,8 +11,10 @@ public:
     CPU() {}
 
     void load (uint8_t* program, size_t size) {
-        Reset ();
-        memory = new uint8_t[2048 * 32];
+        int ramsize = 2048 * 32;
+        memory = new uint8_t[ramsize];
+        for (int t = 0; t < ramsize; t++) memory[t] = 0;
+        Reset();
         memcpy (&memory[PC], program, size);
     }
 
@@ -24,7 +26,7 @@ public:
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register
     uint8_t  Y = 0;          //Y Register
-    uint16_t SP;             //Stack Pointer
+    uint8_t  SP;             //Stack Pointer
     uint16_t PC;             //Program Counter
     uint8_t  SR;             //Status Register
 
@@ -40,8 +42,8 @@ public:
     };
 
     void Reset() {
-        SP = 0x01FF;
-        PC = 0x8000;
+        SP = 0xFF;
+        PC = 0x0600;
         SR = FLAGS::IGNORED;
     }
 
@@ -55,6 +57,7 @@ public:
     }
 
     void Run() {
+        Show();
         while (!(SR & FLAGS::B)) {
             Call();
             Show();
@@ -118,24 +121,24 @@ public:
     }
 
     void ABS(void (CPU::* command)()) {
-        uint16_t MSB = Fetch();
         uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
         value = (MSB << 8) | LSB;
         isValueRegister = true;
         (this->*command)();
     }
 
     void ABSX(void (CPU::* command)()) {
-        uint16_t MSB = Fetch();
         uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
         value = ((MSB << 8) | LSB) + X;
         isValueRegister = true;
         (this->*command)();
     }
 
     void ABSY(void (CPU::* command)()) {
-        uint16_t MSB = Fetch();
         uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
         value = ((MSB << 8) | LSB) + Y;
         isValueRegister = true;
         (this->*command)();
@@ -159,6 +162,13 @@ public:
         else A = value;
         SetFlag(FLAGS::Z, A == 0);
         SetFlag(FLAGS::N, FLAGS::N & A);
+    }
+
+    void LDX() {
+        if (isValueRegister) X = memory[value];
+        else X = value;
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, FLAGS::N & X);
     }
 
     void TAX() {
@@ -201,6 +211,72 @@ public:
         memory[value] = Y;
     }
 
+    void JSR() {
+        memory[SP] = PC;
+        SP--;
+        memory[SP] = PC >> 8;
+        SP--;
+        PC = value;
+    }
+
+    void RTS() {
+        uint16_t toPC;
+        SP++;
+        toPC = uint16_t(memory[SP]) << 8;
+        SP++;
+        toPC |= memory[SP];
+        PC = toPC;
+    }
+
+    void CLC() {
+        SetFlag(FLAGS::C, false);
+    }
+
+    void CMP() {
+        uint8_t res;
+        if (isValueRegister)
+            res = A - memory[value];
+        else
+            res = A - value;
+        SetFlag(FLAGS::C, A >= value);
+        SetFlag(FLAGS::Z, A == value);
+        SetFlag(FLAGS::N, FLAGS::N & res);
+    }
+
+    void CPX() {
+        uint8_t res;
+        if (isValueRegister)
+            res = X - memory[value];
+        else
+            res = X - value;
+        SetFlag(FLAGS::C, X >= value);
+        SetFlag(FLAGS::Z, X == value);
+        SetFlag(FLAGS::N, FLAGS::N & res);
+    }
+
+    void BEQ() {                                        //not completed
+        if (!(SR & FLAGS::Z)) return;
+        PC += value;
+    }
+
+    void BNE() {                                        //not completed
+        if (SR & FLAGS::Z) return;
+        PC += value;
+    }
+
+    void ORA() {
+        if (isValueRegister)
+            A |= memory[value];
+        else
+            A |= value;
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
+    }
+
+    void JMP() {
+        PC = value;
+    }
+
     void Show() {
         //system("cls");
 
@@ -226,6 +302,11 @@ private:
         {0xA9, {&CPU::LDA, &CPU::IMM,  "LDA", 2, 2}},
         {0xA5, {&CPU::LDA, &CPU::ZPG,  "LDA", 2, 3}},
         {0xB5, {&CPU::LDA, &CPU::ZPGX, "LDA", 2, 4}},
+        {0xA2, {&CPU::LDX, &CPU::IMM,  "LDX", 2, 2}},
+        {0xA6, {&CPU::LDX, &CPU::ZPG,  "LDX", 2, 3}},
+        {0xB6, {&CPU::LDX, &CPU::ZPGY, "LDX", 2, 4}},
+        {0xAE, {&CPU::LDX, &CPU::ABS,  "LDX", 3, 4}},
+        {0xBE, {&CPU::LDX, &CPU::ABSY, "LDX", 3, 4}},           // cycles (+1 if page crossed)
         {0xAA, {&CPU::TAX, &CPU::IMP,  "TAX", 1, 2}},
         {0xE8, {&CPU::INX, &CPU::IMP,  "INX", 1, 2}},
         {0x00, {&CPU::BRK, &CPU::IMP,  "BRK", 1, 7}},
@@ -233,7 +314,20 @@ private:
         {0x29, {&CPU::AND, &CPU::IMM,  "AND", 2, 2}},
         {0x85, {&CPU::STA, &CPU::ZPG,  "STA", 2, 3}},
         {0x86, {&CPU::STX, &CPU::ZPG,  "STX", 2, 3}},
-        {0x84, {&CPU::STY, &CPU::ZPG,  "STY", 2, 3}}
+        {0x84, {&CPU::STY, &CPU::ZPG,  "STY", 2, 3}},
+        {0x20, {&CPU::JSR, &CPU::ABS,  "JSR", 3, 6}},
+        {0x60, {&CPU::RTS, &CPU::IMP,  "RTS", 1, 6}},
+        {0x18, {&CPU::CLC, &CPU::IMP,  "CLC", 1, 2}},
+        {0xC9, {&CPU::CMP, &CPU::IMM,  "CMP", 2, 2}},
+        {0xC5, {&CPU::CMP, &CPU::ZPG,  "CMP", 2, 3}},
+        {0xE0, {&CPU::CPX, &CPU::IMM,  "CPX", 2, 2}},
+        {0xE4, {&CPU::CPX, &CPU::ZPG,  "CPX", 2, 3}},
+        {0xEC, {&CPU::CPX, &CPU::ABS,  "CPX", 2, 4}},
+        {0xF0, {&CPU::BEQ, &CPU::RLT,  "BEQ", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0xD0, {&CPU::BNE, &CPU::RLT,  "BNE", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
+        {0x4C, {&CPU::JMP, &CPU::ABS,  "JMP", 3, 3}},
+        {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}}
     };
 
 };
