@@ -159,34 +159,46 @@ public:
         else A = value;
         SetFlag(FLAGS::Z, A == 0);
         SetFlag(FLAGS::N, FLAGS::N & A);
-        std::cout<<"LDA\n";
     }
 
     void TAX() {
         X = A;
         SetFlag(FLAGS::Z, X == 0);
         SetFlag(FLAGS::N, FLAGS::N & X);
-        std::cout << "TAX\n";
     }
 
     void INX() {
         X++;
         SetFlag(FLAGS::Z, X == 0);
         SetFlag(FLAGS::N, FLAGS::N & X);
-        std::cout << "INX\n";
     }
 
     void BRK() {                                        //not completed
         memory[SP] = PC;
         SetFlag(FLAGS::B, true);
-        std::cout << "BRK\n";
     }
 
     void ADC() {                                        //not compeled
         uint8_t edge = std::min(A, (uint8_t)value);
         A = A + value + (SR & FLAGS::C);
         SetFlag(FLAGS::C, A < edge);
-        std::cout << "ADC\n";
+    }
+
+    void AND() {
+        if (isValueRegister) A &= memory[value];
+        else A &= value;
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
+    }
+
+    void STA() {
+        memory[value] = A;
+    }
+    void STX() {
+        memory[value] = X;
+    }
+    void STY() {
+        memory[value] = Y;
     }
 
     void Show() {
@@ -206,18 +218,25 @@ private:
         void (CPU::* command)();
         void (CPU::* mode)( void (CPU::*)());
         std::string name;
+        uint16_t bytes;
+        uint8_t cycles;
     };
 
     std::unordered_map<uint8_t, Command> instructions = {
-        {0xA9, {&CPU::LDA, &CPU::IMM, "LDA"}},
-        {0xAA, {&CPU::TAX, &CPU::IMP, "TAX"}},
-        {0xE8, {&CPU::INX, &CPU::IMP, "INX"}},
-        {0x00, {&CPU::BRK, &CPU::IMP, "BRK"}},
-        {0x69, {&CPU::ADC, &CPU::IMM, "ADC"}}
+        {0xA9, {&CPU::LDA, &CPU::IMM,  "LDA", 2, 2}},
+        {0xA5, {&CPU::LDA, &CPU::ZPG,  "LDA", 2, 3}},
+        {0xB5, {&CPU::LDA, &CPU::ZPGX, "LDA", 2, 4}},
+        {0xAA, {&CPU::TAX, &CPU::IMP,  "TAX", 1, 2}},
+        {0xE8, {&CPU::INX, &CPU::IMP,  "INX", 1, 2}},
+        {0x00, {&CPU::BRK, &CPU::IMP,  "BRK", 1, 7}},
+        {0x69, {&CPU::ADC, &CPU::IMM,  "ADC", 2, 2}},
+        {0x29, {&CPU::AND, &CPU::IMM,  "AND", 2, 2}},
+        {0x85, {&CPU::STA, &CPU::ZPG,  "STA", 2, 3}},
+        {0x86, {&CPU::STX, &CPU::ZPG,  "STX", 2, 3}},
+        {0x84, {&CPU::STY, &CPU::ZPG,  "STY", 2, 3}}
     };
 
 };
-
 
 
 class NES : public olc::PixelGameEngine
@@ -235,10 +254,11 @@ public:
     bool OnUserCreate() override
     {
         std::ifstream file;
-        std::string file_name = "test1.6502";
+        std::string file_name = "snake.6502";
         file.open(file_name, std::ifstream::binary);
         if (!file.is_open()) {
-            std::cout << "No input file" << file_name << std::endl;
+            std::cout << "No input file " << file_name << std::endl;
+            return false;
         }
         std::vector<uint8_t> program(std::istreambuf_iterator<char>(file), {});
         CPU6502.load(program.data(), program.size());
