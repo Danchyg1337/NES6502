@@ -16,6 +16,9 @@ public:
 
     uint8_t* memory;
 
+    uint16_t value = 0;
+    bool isValueRegister = false;
+
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register
     uint8_t  Y = 0;          //Y Register
@@ -54,48 +57,130 @@ public:
     }
 
     void Call() {
-        uint8_t command = Fetch();
-        if (instructions.find(command) == instructions.end()) InvalidCommand(command);
-        else (this->*instructions[command])();
+        uint8_t opcode = Fetch();
+        if (instructions.find(opcode) == instructions.end()) InvalidCommand(opcode);
+        else (this->*instructions[opcode].mode)(instructions[opcode].command);
     }
 
     void InvalidCommand(uint8_t code) {
         printf("Invalid command : %02X\n", code);
     }
 
+    void SetFlag(FLAGS flag, bool set) {
+        if (set)
+            SR = SR | flag;
+        else
+            SR = SR & ~flag;
+    }
+
+    //addressing modes 
+    void IMP(void (CPU::* command)()) {
+        (this->*command)();
+    }
+
+    void ACC() {
+        
+    }
+
+    void IMM(void (CPU::*command)()) {
+        value = Fetch();
+        isValueRegister = false;
+        (this->*command)();
+    }
+
+    void ZPG(void (CPU::* command)()) {
+        value = Fetch();
+        isValueRegister = true;
+        (this->*command)();
+    }
+
+    void ZPGX(void (CPU::* command)()) {
+        value = uint8_t(Fetch() + X);
+        isValueRegister = true;
+        (this->*command)();
+    }
+
+    void ZPGY(void (CPU::* command)()) {
+        value = uint8_t(Fetch() + Y);
+        isValueRegister = true;
+        (this->*command)();
+    }
+
+    void RLT(void (CPU::* command)()) {
+        value = Fetch();
+        isValueRegister = false;
+        (this->*command)();
+    }
+
+    void ABS(void (CPU::* command)()) {
+        uint16_t MSB = Fetch();
+        uint16_t LSB = Fetch();
+        value = (MSB << 8) | LSB;
+        isValueRegister = true;
+        (this->*command)();
+    }
+
+    void ABSX(void (CPU::* command)()) {
+        uint16_t MSB = Fetch();
+        uint16_t LSB = Fetch();
+        value = ((MSB << 8) | LSB) + X;
+        isValueRegister = true;
+        (this->*command)();
+    }
+
+    void ABSY(void (CPU::* command)()) {
+        uint16_t MSB = Fetch();
+        uint16_t LSB = Fetch();
+        value = ((MSB << 8) | LSB) + Y;
+        isValueRegister = true;
+        (this->*command)();
+    }
+
+    void IND(void (CPU::* command)()) {
+
+    }
+
+    void IXIR(void (CPU::* command)()) {
+
+    }
+
+    void IRIX(void (CPU::* command)()) {
+
+    }
+
+    //instructions
     void LDA(){
-        uint8_t value = Fetch();
-        A = value;
-        SR = (SR & ~FLAGS::Z) | (FLAGS::Z * !(bool)A);
-        SR = (SR & ~FLAGS::N) | (FLAGS::N & A);
+        if (isValueRegister) A = memory[value];
+        else A = value;
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
         std::cout<<"LDA\n";
     }
 
     void TAX() {
         X = A;
-        SR = (SR & ~FLAGS::Z) | (FLAGS::Z * !(bool)X);
-        SR = (SR & ~FLAGS::N) | (FLAGS::N & X);
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, FLAGS::N & X);
         std::cout << "TAX\n";
     }
 
     void INX() {
         X++;
-        SR = (SR & ~FLAGS::Z) | (FLAGS::Z * !(bool)X);
-        SR = (SR & ~FLAGS::N) | (FLAGS::N & X);
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, FLAGS::N & X);
         std::cout << "INX\n";
     }
 
     void BRK() {                                        //not completed
         memory[SP] = PC;
-        SR = (SR | FLAGS::B);
+        SetFlag(FLAGS::B, true);
         std::cout << "BRK\n";
     }
 
     void ADC() {                                        //not compeled
-        uint8_t value = Fetch();
-        uint8_t edge = std::min(A, value);
+        uint8_t edge = std::min(A, (uint8_t)value);
         A = A + value + (SR & FLAGS::C);
-        SR = (SR & ~FLAGS::C) | (A < edge);
+        SetFlag(FLAGS::C, A < edge);
         std::cout << "ADC\n";
     }
 
@@ -112,21 +197,27 @@ public:
 
         //system("cls");
         printf("SR %c%c%c%c%c%c%c%c\n", BYTE_TO_BINARY(this->SR));
+        printf("PC %04X\n", this->PC);
+        printf("SP %04X\n", this->SP);
         printf("A %02X\n", this->A);
         printf("X %02X\n", this->X);
         printf("Y %02X\n", this->Y);
-        printf("PC %04X\n", this->PC);
-        printf("SP %04X\n", this->SP);
 
     }
 
 private:
-    std::unordered_map<uint8_t, void (CPU::*)()> instructions = {
-        {0xA9, &CPU::LDA},
-        {0xAA, &CPU::TAX},
-        {0xE8, &CPU::INX},
-        {0x00, &CPU::BRK},
-        {0x69, &CPU::ADC}
+    struct Command {
+        void (CPU::* command)();
+        void (CPU::* mode)( void (CPU::*)());
+        std::string name;
+    };
+
+    std::unordered_map<uint8_t, Command> instructions = {
+        {0xA9, {&CPU::LDA, &CPU::IMM, "LDA"}},
+        {0xAA, {&CPU::TAX, &CPU::IMP, "TAX"}},
+        {0xE8, {&CPU::INX, &CPU::IMP, "INX"}},
+        {0x00, {&CPU::BRK, &CPU::IMP, "BRK"}},
+        {0x69, {&CPU::ADC, &CPU::IMM, "ADC"}}
     };
 
 };
@@ -141,6 +232,8 @@ public:
         sAppName = "NES";
     }
 
+
+
 public:
     bool OnUserCreate() override
     {
@@ -154,10 +247,11 @@ public:
 
     bool OnUserUpdate(float fElapsedTime) override
     {
-        
-        for (int x = 0; x < ScreenWidth(); x++)
+        Clear(olc::Pixel(255, 128, 255));
+        /*for (int x = 0; x < ScreenWidth(); x++)
             for (int y = 0; y < ScreenHeight(); y++)
-                Draw(x, y, olc::Pixel(rand() % 255, rand() % 255, rand() % 255));
+                Draw(x, y, olc::Pixel(rand() % 255, rand() % 255, rand() % 255));*/
+        DrawString(ScreenWidth() - 50, ScreenHeight() - 10, "HELLO");
         return true;
     }
 };
