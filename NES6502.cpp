@@ -360,7 +360,7 @@ public:
 
     template<class... Ts> 
     void print_parametr (int x, int y, std::string buff, const char* text, Ts&&... args) {
-        sprintf_s (const_cast<char*> buff.data (), buff.size (), text, args...);
+        sprintf_s (const_cast<char*>(buff.data ()), buff.size (), text, args...);
         DrawString (x, y, buff, olc::RED, 1);
     }
 
