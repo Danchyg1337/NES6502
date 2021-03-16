@@ -290,12 +290,12 @@ public:
         print_parametr (nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY(CPU6502.SR));
         int height_ = 41;
 
-        std::deque<std::string> que_;
+        std::deque<std::string> queque_;
 
         uint16_t local_pc = 0x8000;
         uint8_t opcode = CPU6502.memory[local_pc];
        
-        while ((local_pc < CPU6502.PC + 5) and opcode != 0x00){ //and !(SR & FLAGS::B))) Break opcode
+        while ((local_pc < CPU6502.PC + 5) && opcode != 0x00){ //and !(SR & FLAGS::B))) Break opcode
             std::ostringstream string_stream;
             
             opcode = CPU6502.memory[local_pc];
@@ -304,20 +304,20 @@ public:
             string_stream << instruction.name << " ";
 
             for (uint16_t i = 0; i < instruction.bytes; i++) {
-                string_stream << std::hex << CPU6502.memory[local_pc + i] << " ";
+                string_stream << CPU6502.memory[local_pc + i] << " ";
             }
             
-            que_.push_back(string_stream.str());
+            queque_.push_back(string_stream.str());
             
 
             local_pc += instruction.bytes;
 
-            if (que_.size () > 10) que_.pop_front();
+            if (queque_.size () > 10) queque_.pop_front();
         }
 
-        for (int i = 0; i < que_.size(); i++)
-            DrawString (nes_width + 5, height_ + 8 * (i + 1), que_[i], olc::RED, 1);
-        // FIXME надо пошаговое выполнение
+        for (int i = 0; i < queque_.size(); i++)
+            DrawString (nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::RED, 1);
+        // FIXME add пошаговое выполнение
         return true;
     }
 };

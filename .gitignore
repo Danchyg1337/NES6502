@@ -11,6 +11,9 @@
 *.sln.docstates
 *.nes
 *.6502
+HxD.exe
+*.6502.bak
+CppProperties.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
