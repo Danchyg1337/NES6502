@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <deque>
 #include <vector>
+#include <mutex>
 
 class CPU {
 public:
@@ -23,6 +24,9 @@ public:
 
     uint16_t value = 0;
     bool isValueRegister = false;
+
+    uint16_t startAddr = 0x0600;
+    uint16_t stackBottom = 0x0100;
 
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register
@@ -44,7 +48,7 @@ public:
 
     void Reset() {
         SP = 0xFF;
-        PC = 0x0600;
+        PC = startAddr;
         SR = FLAGS::IGNORED;
     }
 
@@ -214,9 +218,9 @@ public:
     }
 
     void JSR() {
-        memory[SP] = PC;
+        memory[stackBottom + SP] = PC;
         SP--;
-        memory[SP] = PC >> 8;
+        memory[stackBottom + SP] = PC >> 8;
         SP--;
         PC = value;
     }
@@ -224,9 +228,9 @@ public:
     void RTS() {
         uint16_t toPC;
         SP++;
-        toPC = uint16_t(memory[SP]) << 8;
+        toPC = uint16_t(memory[stackBottom + SP]) << 8;
         SP++;
-        toPC |= memory[SP];
+        toPC |= memory[stackBottom + SP];
         PC = toPC;
     }
 
@@ -333,10 +337,63 @@ public:
 
 };
 
+std::mutex lock;
+
+class MemoryGUI : public olc::PixelGameEngine {
+    CPU* cpu;
+public:
+    MemoryGUI(CPU* cpu) {
+        lock.lock();
+        this->cpu = cpu;
+        lock.unlock();
+        
+    }
+    bool OnUserCreate() override
+    {
+        lock.lock();
+        if (!cpu->memory) return false;
+        lock.unlock();
+        return true;
+    }
+    bool OnUserUpdate(float fElapsedTime) override
+    {
+        lock.lock();
+        Clear(olc::Pixel(255, 128, 255));
+        DrawString(5, 5, "Zero Page", olc::RED, 1);
+
+        for (uint16_t row = 0x00; row < 256; row += 8) {
+            std::string line(4, ' ');
+            sprintf_s(line.data(), line.size(), "$%02X", row);
+            for (uint16_t column = row; column < row + 8; column++) {
+                std::string val(3, ' ');
+                sprintf_s(val.data(), val.size(), "%02X", cpu->memory[column]);
+                line += val;
+            }
+            DrawString(5, 15 + row, line, olc::RED, 1);
+        }
+
+        DrawString(235, 5, "Stack", olc::RED, 1);
+        for (uint16_t row = cpu->stackBottom + 0xFF; row > cpu->stackBottom + 0xFF * 0.75; row -= 2) {
+            std::string line(6, ' ');
+            sprintf_s(line.data(), line.size(), "$%04X", row);
+            for (uint16_t column = row; column < row + 2; column++) {
+                std::string val(4, ' ');
+                sprintf_s(val.data(), val.size(), "%02X", cpu->memory[column]);
+                line += val;
+            }
+            DrawString(235, 15 + (cpu->stackBottom + 0xFF - row) * 4, line, olc::RED, 1);
+        }
+
+        lock.unlock();
+        return true;
+    }
+};
 
 class NES : public olc::PixelGameEngine
 {
     CPU CPU6502;
+
+    MemoryGUI* ZPage;
 
     int nes_width = 256;
     int nes_height = 240;
@@ -378,18 +435,18 @@ public:
         print_parametr(nes_width + 5, 1, a,  "Accumulator %02X", CPU6502.A);
         print_parametr(nes_width + 5, 9, a,  "X Register %02X", CPU6502.X);
         print_parametr(nes_width + 5, 17, a, "Y Register %02X", CPU6502.Y);
-        print_parametr(nes_width + 5, 25, a, "Stack Pointer %04X", CPU6502.SP);
+        print_parametr(nes_width + 5, 25, a, "Stack Pointer %02X", CPU6502.SP);
         print_parametr(nes_width + 5, 33, a, "Program Counter %04X", CPU6502.PC);
         print_parametr(nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY(CPU6502.SR));
         int height_ = 50;
 
         std::deque<std::string> queque_;
 
-        uint16_t local_pc = 0x0600;                             // changed 0x8000;
+        uint16_t local_pc = CPU6502.startAddr;
         uint8_t opcode = CPU6502.memory[local_pc];
 
         int current = 0, aboveLocalPC = 0;
-        while ((aboveLocalPC < 5) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
+        while ((aboveLocalPC < 5 || queque_.size() < 10) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
 
             opcode = CPU6502.memory[local_pc];
             const auto& instruction = CPU6502.instructions[opcode];
@@ -421,20 +478,6 @@ public:
                 DrawString(nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::BLUE, 1);
             else
                 DrawString(nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::RED, 1);
-
-        DrawString(nes_width + 5, height_ + 96, "Zero Page", olc::RED, 1);
-        
-        for (uint8_t row = 0x00; row < 80; row += 8) {
-            std::string line(4, ' ');
-            sprintf_s(line.data(), line.size(), "$%02X", row);
-            for (uint8_t column = row; column < row + 8; column++) {
-                std::string val(3, ' ');
-                sprintf_s(val.data(), val.size(), "%02X", CPU6502.memory[column]);
-                line += val;
-            }
-            DrawString(nes_width + 5, height_ + 105 + row, line, olc::RED, 1);
-        }
-
     }
 
     bool OnUserUpdate (float fElapsedTime) override
@@ -445,6 +488,13 @@ public:
         if (GetKey(olc::Key::R).bPressed) CPU6502.Reset();
         if (GetKey(olc::Key::SPACE).bPressed) CPU6502.Run();
         if (GetKey(olc::Key::ENTER).bPressed) CPU6502.Step();
+        if (GetKey(olc::Key::SHIFT).bPressed) {
+            if (!ZPage) {
+                ZPage = new MemoryGUI(&CPU6502);
+                if (ZPage && ZPage->Construct(356, 280, 2, 2))
+                    ZPage->Start();
+            }
+        }
 
         return true;
     }
@@ -454,6 +504,6 @@ public:
 int main()
 {
     NES nes;
-    if (nes.Construct(256 + 225, 240, 3, 3))
+    if (nes.Construct(256 + 200, 240, 3, 3))
         nes.Start();
 }
