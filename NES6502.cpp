@@ -50,6 +50,7 @@ public:
         SP = 0xFF;
         PC = startAddr;
         SR = FLAGS::IGNORED;
+        system("cls");
     }
 
 
@@ -62,7 +63,6 @@ public:
     void Run() {
         while (!(SR & FLAGS::B)) {
             Call();
-            Show();
         }
     }
 
@@ -73,7 +73,10 @@ public:
     void Call() {
         uint8_t opcode = Fetch();
         if (instructions.find(opcode) == instructions.end()) InvalidCommand(opcode);
-        else (this->*instructions[opcode].mode)(instructions[opcode].command);
+        else {
+            (this->*instructions[opcode].mode)(instructions[opcode].command);
+            printf("%s\n", instructions[opcode].name.data());
+        }
     }
 
     void InvalidCommand(uint8_t code) {
@@ -151,7 +154,11 @@ public:
     }
 
     void IND(void (CPU::* command)()) {
-
+        uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
+        value = ((MSB << 8) | LSB) + Y;
+        isValueRegister = true;
+        (this->*command)();
     }
 
     void IXIR(void (CPU::* command)()) {
@@ -177,6 +184,13 @@ public:
         SetFlag(FLAGS::N, FLAGS::N & X);
     }
 
+    void LDY() {
+        if (isValueRegister) Y = memory[value];
+        else Y = value;
+        SetFlag(FLAGS::Z, Y == 0);
+        SetFlag(FLAGS::N, FLAGS::N & Y);
+    }
+
     void TAX() {
         X = A;
         SetFlag(FLAGS::Z, X == 0);
@@ -187,6 +201,12 @@ public:
         X++;
         SetFlag(FLAGS::Z, X == 0);
         SetFlag(FLAGS::N, FLAGS::N & X);
+    }
+
+    void INY() {
+        Y++;
+        SetFlag(FLAGS::Z, Y == 0);
+        SetFlag(FLAGS::N, FLAGS::N & Y);
     }
 
     void BRK() {                                        //not completed
@@ -218,9 +238,9 @@ public:
     }
 
     void JSR() {
-        memory[stackBottom + SP] = PC;
+        memory[stackBottom + SP] = (PC - 1) >> 8;
         SP--;
-        memory[stackBottom + SP] = PC >> 8;
+        memory[stackBottom + SP] = PC - 1;
         SP--;
         PC = value;
     }
@@ -228,10 +248,12 @@ public:
     void RTS() {
         uint16_t toPC;
         SP++;
-        toPC = uint16_t(memory[stackBottom + SP]) << 8;
+        toPC = memory[stackBottom + SP];
+        memory[stackBottom + SP] = 0x00;
         SP++;
-        toPC |= memory[stackBottom + SP];
-        PC = toPC;
+        toPC |= uint16_t(memory[stackBottom + SP]) << 8;
+        memory[stackBottom + SP] = 0x00;
+        PC = toPC + 1;
     }
 
     void CLC() {
@@ -260,14 +282,25 @@ public:
         SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
+    void CPY() {
+        uint8_t res;
+        if (isValueRegister)
+            res = Y - memory[value];
+        else
+            res = Y - value;
+        SetFlag(FLAGS::C, Y >= value);
+        SetFlag(FLAGS::Z, Y == value);
+        SetFlag(FLAGS::N, FLAGS::N & res);
+    }
+
     void BEQ() {                                        //not completed
         if (!(SR & FLAGS::Z)) return;
-        PC += value;
+        PC += int8_t(value);
     }
 
     void BNE() {                                        //not completed
         if (SR & FLAGS::Z) return;
-        PC += value;
+        PC += int8_t(value);
     }
 
     void ORA() {
@@ -307,17 +340,14 @@ public:
         SetFlag(FLAGS::N, A & FLAGS::N);
     }
 
+    void PHA() {
+        memory[stackBottom + SP] = A;
+        SP--;
+    }
 
-    void Show() {
-        //system("cls");
-
-        printf ("SR %c%c%c%c%c%c%c%c\n", BYTE_TO_BINARY (this->SR));
-        printf ("PC %04X\n", this->PC);
-        printf ("SP %04X\n", this->SP);
-        printf ("A %02X\n", this->A);
-        printf ("X %02X\n", this->X);
-        printf ("Y %02X\n", this->Y); 
-
+    void PLA() {
+        SP++;
+        A = memory[stackBottom + SP];
     }
 
     struct Command {
@@ -337,12 +367,22 @@ public:
         {0xB6, {&CPU::LDX, &CPU::ZPGY, "LDX", 2, 4}},
         {0xAE, {&CPU::LDX, &CPU::ABS,  "LDX", 3, 4}},
         {0xBE, {&CPU::LDX, &CPU::ABSY, "LDX", 3, 4}},           // cycles (+1 if page crossed)
+        {0xA0, {&CPU::LDY, &CPU::IMM,  "LDY", 2, 2}},
+        {0xA4, {&CPU::LDY, &CPU::ZPG,  "LDY", 2, 3}},
+        {0xB0, {&CPU::LDY, &CPU::ZPGX, "LDY", 2, 4}},
+        {0xAC, {&CPU::LDY, &CPU::ABS,  "LDY", 3, 4}},
+        {0xBC, {&CPU::LDY, &CPU::ABSX, "LDY", 3, 4}},           // cycles (+1 if page crossed)
         {0xAA, {&CPU::TAX, &CPU::IMP,  "TAX", 1, 2}},
         {0xE8, {&CPU::INX, &CPU::IMP,  "INX", 1, 2}},
+        {0xC8, {&CPU::INY, &CPU::IMP,  "INY", 1, 2}},
         {0x00, {&CPU::BRK, &CPU::IMP,  "BRK", 1, 7}},
         {0x69, {&CPU::ADC, &CPU::IMM,  "ADC", 2, 2}},
         {0x29, {&CPU::AND, &CPU::IMM,  "AND", 2, 2}},
         {0x85, {&CPU::STA, &CPU::ZPG,  "STA", 2, 3}},
+        {0x95, {&CPU::STA, &CPU::ZPGX, "STA", 2, 4}},
+        {0x8D, {&CPU::STA, &CPU::ABS,  "STA", 3, 5}},
+        {0x9D, {&CPU::STA, &CPU::ABSX, "STA", 3, 5}},
+        {0x99, {&CPU::STA, &CPU::ABSY, "STA", 3, 3}},
         {0x86, {&CPU::STX, &CPU::ZPG,  "STX", 2, 3}},
         {0x84, {&CPU::STY, &CPU::ZPG,  "STY", 2, 3}},
         {0x20, {&CPU::JSR, &CPU::ABS,  "JSR", 3, 6}},
@@ -353,6 +393,9 @@ public:
         {0xE0, {&CPU::CPX, &CPU::IMM,  "CPX", 2, 2}},
         {0xE4, {&CPU::CPX, &CPU::ZPG,  "CPX", 2, 3}},
         {0xEC, {&CPU::CPX, &CPU::ABS,  "CPX", 2, 4}},
+        {0xC0, {&CPU::CPY, &CPU::IMM,  "CPY", 2, 2}},
+        {0xC4, {&CPU::CPY, &CPU::ZPG,  "CPY", 2, 3}},
+        {0xCC, {&CPU::CPY, &CPU::ABS,  "CPY", 2, 4}},
         {0xF0, {&CPU::BEQ, &CPU::RLT,  "BEQ", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0xD0, {&CPU::BNE, &CPU::RLT,  "BNE", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
@@ -364,7 +407,9 @@ public:
         {0xEE, {&CPU::INC, &CPU::ABS,  "INC", 3, 6}},
         {0xFE, {&CPU::INC, &CPU::ABSX, "INC", 3, 7}},
         {0xCA, {&CPU::DEX, &CPU::IMP,  "DEX", 1, 2}},
-        {0x8A, {&CPU::TXA, &CPU::IMP,  "TXA", 1, 2}}
+        {0x8A, {&CPU::TXA, &CPU::IMP,  "TXA", 1, 2}},
+        {0x48, {&CPU::PHA, &CPU::IMP,  "PHA", 1, 3}},
+        {0x68, {&CPU::PLA, &CPU::IMP,  "PLA", 1, 4}}
     };
 
 };
@@ -408,7 +453,7 @@ public:
         for (uint16_t row = cpu->stackBottom + 0xFF; row > cpu->stackBottom + 0xFF * 0.75; row -= 2) {
             std::string line(6, ' ');
             sprintf_s(const_cast<char*>(line.data()), line.size(), "$%04X", row);
-            for (uint16_t column = row; column < row + 2; column++) {
+            for (uint16_t column = row; column > row - 2; column--) {
                 std::string val(4, ' ');
                 sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", cpu->memory[column]);
                 line += val;
@@ -533,6 +578,10 @@ public:
         if (GetKey(olc::Key::R).bPressed) CPU6502.Reset();
         if (GetKey(olc::Key::SPACE).bPressed) running = !running;
         if (GetKey(olc::Key::ENTER).bPressed || running) CPU6502.Step();
+        if (CPU6502.SR & CPU::FLAGS::B) {
+            running = false;
+            //CPU6502.Reset();
+        }
         if (GetKey(olc::Key::SHIFT).bPressed) {
             if (!ZPage) {
                 ZPage = new MemoryGUI(&CPU6502);
