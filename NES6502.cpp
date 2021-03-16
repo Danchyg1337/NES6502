@@ -1,10 +1,11 @@
 ﻿#include <iostream>
 #include <fstream>
-#include <vector>
-#include <unordered_map>
 #include "Defines.h"
 #define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
+#include <unordered_map>
+#include <deque>
+#include <vector>
 
 class CPU {
 public:
@@ -48,8 +49,6 @@ public:
 
     uint8_t Fetch() {
         uint8_t fetched = memory[PC];
-
-
         PC++;
         return fetched;
     }
@@ -213,10 +212,9 @@ public:
 
     }
 
-private:
     struct Command {
         void (CPU::* command)();
-        void (CPU::* mode)( void (CPU::*)());
+        void (CPU::* mode)(void (CPU::*)());
         std::string name;
         uint16_t bytes;
         uint8_t cycles;
@@ -254,7 +252,7 @@ public:
     bool OnUserCreate() override
     {
         std::ifstream file;
-        std::string file_name = "snake.6502";
+        std::string file_name = "test1.6502";
         file.open(file_name, std::ifstream::binary);
         if (!file.is_open()) {
             std::cout << "No input file " << file_name << std::endl;
@@ -284,14 +282,42 @@ public:
                 Draw(x, y, olc::Pixel(rand() % 255, rand() % 255, rand() % 255));
 
         std::string a (50, ' ');
+        print_parametr (nes_width + 5, 1, a, "Accamulator %02X", CPU6502.A);
+        print_parametr (nes_width + 5, 9, a, "X Register %02X", CPU6502.X);
+        print_parametr (nes_width + 5, 17, a, "Y Register %02X", CPU6502.Y);
+        print_parametr (nes_width + 5, 25, a, "Stack Pointer %04X", CPU6502.SP);
+        print_parametr (nes_width + 5, 33, a, "Program Counter %04X", CPU6502.PC);
+        print_parametr (nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY(CPU6502.SR));
+        int height_ = 41;
 
-        print_parametr (nes_width + 5, 10, a, "Accamulator %02X", CPU6502.A);
-        print_parametr (nes_width + 5, 20, a, "X Register %02X", CPU6502.X);
-        print_parametr (nes_width + 5, 30, a, "Y Register %02X", CPU6502.Y);
-        print_parametr (nes_width + 5, 40, a, "Stack Pointer %04X", CPU6502.SP);
-        print_parametr (nes_width + 5, 50, a, "Program Counter %04X", CPU6502.PC);
-        print_parametr (nes_width + 5, 60, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY(CPU6502.SR));
+        std::deque<std::string> que_;
 
+        uint16_t local_pc = 0x8000;
+        uint8_t opcode = CPU6502.memory[local_pc];
+       
+        while ((local_pc < CPU6502.PC + 5) and opcode != 0x00){ //and !(SR & FLAGS::B))) Break opcode
+            std::ostringstream string_stream;
+            
+            opcode = CPU6502.memory[local_pc];
+            auto instruction = CPU6502.instructions[opcode];
+
+            string_stream << instruction.name << " ";
+
+            for (uint16_t i = 0; i < instruction.bytes; i++) {
+                string_stream << std::hex << CPU6502.memory[local_pc + i] << " ";
+            }
+            
+            que_.push_back(string_stream.str());
+            
+
+            local_pc += instruction.bytes;
+
+            if (que_.size () > 10) que_.pop_front();
+        }
+
+        for (int i = 0; i < que_.size(); i++)
+            DrawString (nes_width + 5, height_ + 8 * (i + 1), que_[i], olc::RED, 1);
+        // FIXME надо пошаговое выполнение
         return true;
     }
 };
