@@ -346,7 +346,7 @@ public:
     bool OnUserCreate() override
     {
         std::ifstream file;
-        std::string file_name = "test1.6502";
+        std::string file_name = "tamrter.6502";
         file.open(file_name, std::ifstream::binary);
         if (!file.is_open()) {
             std::cout << "No input file " << file_name << std::endl;
@@ -364,16 +364,16 @@ public:
         DrawString (x, y, buff, olc::RED, 1);
     }
 
-    bool OnUserUpdate(float fElapsedTime) override
+    bool OnUserUpdate (float fElapsedTime) override
     {
-        Clear(olc::Pixel(255, 128, 255));
-       
+        Clear (olc::Pixel (255, 128, 255));
+
         int nes_width = 256;
         int nes_height = 240;
 
         for (int x = 0; x < nes_width; x++)
             for (int y = 0; y < nes_height; y++)
-                Draw(x, y, olc::Pixel(rand() % 255, rand() % 255, rand() % 255));
+                Draw (x, y, olc::Pixel (rand () % 255, rand () % 255, rand () % 255));
 
         std::string a (50, ' ');
         print_parametr (nes_width + 5, 1, a, "Accamulator %02X", CPU6502.A);
@@ -381,35 +381,35 @@ public:
         print_parametr (nes_width + 5, 17, a, "Y Register %02X", CPU6502.Y);
         print_parametr (nes_width + 5, 25, a, "Stack Pointer %04X", CPU6502.SP);
         print_parametr (nes_width + 5, 33, a, "Program Counter %04X", CPU6502.PC);
-        print_parametr (nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY(CPU6502.SR));
+        print_parametr (nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY (CPU6502.SR));
         int height_ = 41;
 
         std::deque<std::string> queque_;
 
-        uint16_t local_pc = 0x8000;
+        uint16_t local_pc = 0x0600;                             // changed 0x8000;
         uint8_t opcode = CPU6502.memory[local_pc];
-       
-        while ((local_pc < CPU6502.PC + 5) && opcode != 0x00){ //and !(SR & FLAGS::B))) Break opcode
+
+        while ((local_pc < CPU6502.PC + 5) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
             std::ostringstream string_stream;
-            
+
             opcode = CPU6502.memory[local_pc];
             auto instruction = CPU6502.instructions[opcode];
 
             string_stream << instruction.name << " ";
 
             for (uint16_t i = 0; i < instruction.bytes; i++) {
-                string_stream << CPU6502.memory[local_pc + i] << " ";
+                string_stream << std::hex << CPU6502.memory[local_pc + i] << " ";
             }
-            
-            queque_.push_back(string_stream.str());
-            
+
+            queque_.push_back (string_stream.str ());
+
 
             local_pc += instruction.bytes;
 
-            if (queque_.size () > 10) queque_.pop_front();
+            if (queque_.size () > 10) queque_.pop_front ();
         }
 
-        for (int i = 0; i < queque_.size(); i++)
+        for (int i = 0; i < queque_.size (); i++)
             DrawString (nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::RED, 1);
         // FIXME add пошаговое выполнение
         return true;
