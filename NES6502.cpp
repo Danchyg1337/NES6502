@@ -56,11 +56,14 @@ public:
     }
 
     void Run() {
-        Show();
         while (!(SR & FLAGS::B)) {
             Call();
             Show();
         }
+    }
+
+    void Step() {
+        Call();
     }
 
     void Call() {
@@ -292,7 +295,7 @@ public:
         void (CPU::* command)();
         void (CPU::* mode)(void (CPU::*)());
         std::string name;
-        uint16_t bytes;
+        uint8_t bytes;
         uint8_t cycles;
     };
 
@@ -335,6 +338,8 @@ class NES : public olc::PixelGameEngine
 {
     CPU CPU6502;
 
+    int nes_width = 256;
+    int nes_height = 240;
 public:
     NES()
     {
@@ -346,7 +351,7 @@ public:
     bool OnUserCreate() override
     {
         std::ifstream file;
-        std::string file_name = "tamrter.6502";
+        std::string file_name = "snake.6502";
         file.open(file_name, std::ifstream::binary);
         if (!file.is_open()) {
             std::cout << "No input file " << file_name << std::endl;
@@ -354,7 +359,6 @@ public:
         }
         std::vector<uint8_t> program(std::istreambuf_iterator<char>(file), {});
         CPU6502.load(program.data(), program.size());
-        CPU6502.Run();
         return true;
     }
 
@@ -364,54 +368,84 @@ public:
         DrawString (x, y, buff, olc::RED, 1);
     }
 
-    bool OnUserUpdate (float fElapsedTime) override
-    {
-        Clear (olc::Pixel (255, 128, 255));
-
-        int nes_width = 256;
-        int nes_height = 240;
+    void ShowDebug() {
 
         for (int x = 0; x < nes_width; x++)
             for (int y = 0; y < nes_height; y++)
-                Draw (x, y, olc::Pixel (rand () % 255, rand () % 255, rand () % 255));
+                Draw(x, y, olc::Pixel(rand() % 255, rand() % 255, rand() % 255));
 
-        std::string a (50, ' ');
-        print_parametr (nes_width + 5, 1, a, "Accamulator %02X", CPU6502.A);
-        print_parametr (nes_width + 5, 9, a, "X Register %02X", CPU6502.X);
-        print_parametr (nes_width + 5, 17, a, "Y Register %02X", CPU6502.Y);
-        print_parametr (nes_width + 5, 25, a, "Stack Pointer %04X", CPU6502.SP);
-        print_parametr (nes_width + 5, 33, a, "Program Counter %04X", CPU6502.PC);
-        print_parametr (nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY (CPU6502.SR));
-        int height_ = 41;
+        std::string a(50, ' ');
+        print_parametr(nes_width + 5, 1, a,  "Accumulator %02X", CPU6502.A);
+        print_parametr(nes_width + 5, 9, a,  "X Register %02X", CPU6502.X);
+        print_parametr(nes_width + 5, 17, a, "Y Register %02X", CPU6502.Y);
+        print_parametr(nes_width + 5, 25, a, "Stack Pointer %04X", CPU6502.SP);
+        print_parametr(nes_width + 5, 33, a, "Program Counter %04X", CPU6502.PC);
+        print_parametr(nes_width + 5, 41, a, "Status Register %c%c%c%c%c%c%c%c", BYTE_TO_BINARY(CPU6502.SR));
+        int height_ = 50;
 
         std::deque<std::string> queque_;
 
         uint16_t local_pc = 0x0600;                             // changed 0x8000;
         uint8_t opcode = CPU6502.memory[local_pc];
 
-        while ((local_pc < CPU6502.PC + 5) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
-            std::ostringstream string_stream;
+        int current = 0, aboveLocalPC = 0;
+        while ((aboveLocalPC < 5) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
 
             opcode = CPU6502.memory[local_pc];
-            auto instruction = CPU6502.instructions[opcode];
+            const auto& instruction = CPU6502.instructions[opcode];
 
-            string_stream << instruction.name << " ";
+            std::string line(9, ' ');
+            sprintf_s(line.data(), line.size(), "%04X %s", local_pc, instruction.name.data());
 
-            for (uint16_t i = 0; i < instruction.bytes; i++) {
-                string_stream << std::hex << CPU6502.memory[local_pc + i] << " ";
+            for (uint8_t i = 1; i < instruction.bytes; i++) {
+                std::string buff(3, ' ');
+                sprintf_s(buff.data(), buff.size(), "%02X", CPU6502.memory[local_pc + i]);
+                line += buff;
             }
 
-            queque_.push_back (string_stream.str ());
+            queque_.push_back(line);
 
-
+            if (local_pc == CPU6502.PC) current = queque_.size() - 1;
+            if (local_pc > CPU6502.PC) aboveLocalPC++;
             local_pc += instruction.bytes;
 
-            if (queque_.size () > 10) queque_.pop_front ();
+
+            if (queque_.size() > 10) {
+                queque_.pop_front();
+                current--;
+            }
         }
 
-        for (int i = 0; i < queque_.size (); i++)
-            DrawString (nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::RED, 1);
-        // FIXME add пошаговое выполнение
+        for (int i = 0; i < queque_.size(); i++)
+            if(i == current)
+                DrawString(nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::BLUE, 1);
+            else
+                DrawString(nes_width + 5, height_ + 8 * (i + 1), queque_[i], olc::RED, 1);
+
+        DrawString(nes_width + 5, height_ + 96, "Zero Page", olc::RED, 1);
+        
+        for (uint8_t row = 0x00; row < 80; row += 8) {
+            std::string line(4, ' ');
+            sprintf_s(line.data(), line.size(), "$%02X", row);
+            for (uint8_t column = row; column < row + 8; column++) {
+                std::string val(3, ' ');
+                sprintf_s(val.data(), val.size(), "%02X", CPU6502.memory[column]);
+                line += val;
+            }
+            DrawString(nes_width + 5, height_ + 105 + row, line, olc::RED, 1);
+        }
+
+    }
+
+    bool OnUserUpdate (float fElapsedTime) override
+    {
+        Clear (olc::Pixel (255, 128, 255));
+        ShowDebug();
+        
+        if (GetKey(olc::Key::R).bPressed) CPU6502.Reset();
+        if (GetKey(olc::Key::SPACE).bPressed) CPU6502.Run();
+        if (GetKey(olc::Key::ENTER).bPressed) CPU6502.Step();
+
         return true;
     }
 };
@@ -420,6 +454,6 @@ public:
 int main()
 {
     NES nes;
-    if (nes.Construct(256 + 200, 240, 4, 4))
+    if (nes.Construct(256 + 225, 240, 3, 3))
         nes.Start();
 }
