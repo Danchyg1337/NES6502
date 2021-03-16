@@ -363,10 +363,10 @@ public:
 
         for (uint16_t row = 0x00; row < 256; row += 8) {
             std::string line(4, ' ');
-            sprintf_s(line.data(), line.size(), "$%02X", row);
+            sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
             for (uint16_t column = row; column < row + 8; column++) {
                 std::string val(3, ' ');
-                sprintf_s(val.data(), val.size(), "%02X", cpu->memory[column]);
+                sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", cpu->memory[column]);
                 line += val;
             }
             DrawString(5, 15 + row, line, olc::RED, 1);
@@ -375,10 +375,10 @@ public:
         DrawString(235, 5, "Stack", olc::RED, 1);
         for (uint16_t row = cpu->stackBottom + 0xFF; row > cpu->stackBottom + 0xFF * 0.75; row -= 2) {
             std::string line(6, ' ');
-            sprintf_s(line.data(), line.size(), "$%04X", row);
+            sprintf_s(const_cast<char*>(line.data()), line.size(), "$%04X", row);
             for (uint16_t column = row; column < row + 2; column++) {
                 std::string val(4, ' ');
-                sprintf_s(val.data(), val.size(), "%02X", cpu->memory[column]);
+                sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", cpu->memory[column]);
                 line += val;
             }
             DrawString(235, 15 + (cpu->stackBottom + 0xFF - row) * 4, line, olc::RED, 1);
@@ -452,11 +452,11 @@ public:
             const auto& instruction = CPU6502.instructions[opcode];
 
             std::string line(9, ' ');
-            sprintf_s(line.data(), line.size(), "%04X %s", local_pc, instruction.name.data());
+            sprintf_s(const_cast<char*>(line.data()), line.size(), "%04X %s", local_pc, instruction.name.data());
 
             for (uint8_t i = 1; i < instruction.bytes; i++) {
                 std::string buff(3, ' ');
-                sprintf_s(buff.data(), buff.size(), "%02X", CPU6502.memory[local_pc + i]);
+                sprintf_s(const_cast<char*>(buff.data()), buff.size(), "%02X", CPU6502.memory[local_pc + i]);
                 line += buff;
             }
 
