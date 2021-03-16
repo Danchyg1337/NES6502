@@ -283,6 +283,31 @@ public:
         PC = value;
     }
 
+    void BIT() {
+        SetFlag(FLAGS::N, value & FLAGS::N);
+        SetFlag(FLAGS::V, value & FLAGS::V);
+        SetFlag(FLAGS::Z, value & A);
+    }
+
+    void INC() {
+        memory[value]++;
+        SetFlag(FLAGS::Z, memory[value] == 0);
+        SetFlag(FLAGS::N, memory[value] & FLAGS::N);
+    }
+
+    void DEX() {
+        X--;
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, X & FLAGS::N);
+    }
+
+    void TXA() {
+        A = X;
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, A & FLAGS::N);
+    }
+
+
     void Show() {
         //system("cls");
 
@@ -332,7 +357,14 @@ public:
         {0xD0, {&CPU::BNE, &CPU::RLT,  "BNE", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
         {0x4C, {&CPU::JMP, &CPU::ABS,  "JMP", 3, 3}},
-        {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}}
+        {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}},
+        {0x24, {&CPU::BIT, &CPU::ZPG,  "BIT", 2, 3}},
+        {0xE6, {&CPU::INC, &CPU::ZPG,  "INC", 2, 5}},
+        {0xF6, {&CPU::INC, &CPU::ZPGX, "INC", 2, 6}},
+        {0xEE, {&CPU::INC, &CPU::ABS,  "INC", 3, 6}},
+        {0xFE, {&CPU::INC, &CPU::ABSX, "INC", 3, 7}},
+        {0xCA, {&CPU::DEX, &CPU::IMP,  "DEX", 1, 2}},
+        {0x8A, {&CPU::TXA, &CPU::IMP,  "TXA", 1, 2}}
     };
 
 };
@@ -397,6 +429,8 @@ class NES : public olc::PixelGameEngine
 
     int nes_width = 256;
     int nes_height = 240;
+
+    bool running = false;
 public:
     NES()
     {
@@ -449,6 +483,17 @@ public:
         while ((aboveLocalPC < 5 || queque_.size() < 10) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
 
             opcode = CPU6502.memory[local_pc];
+            if (CPU6502.instructions.find(opcode) == CPU6502.instructions.end()) {
+                std::string line(15, ' ');
+                sprintf_s(const_cast<char*>(line.data()), line.size(), "%04X %s -> %02X", local_pc, "???", opcode);
+                queque_.push_back(line);
+                aboveLocalPC++;
+                if (queque_.size() > 10) {
+                    queque_.pop_front();
+                    current--;
+                }
+                continue;
+            }
             const auto& instruction = CPU6502.instructions[opcode];
 
             std::string line(9, ' ');
@@ -486,8 +531,8 @@ public:
         ShowDebug();
         
         if (GetKey(olc::Key::R).bPressed) CPU6502.Reset();
-        if (GetKey(olc::Key::SPACE).bPressed) CPU6502.Run();
-        if (GetKey(olc::Key::ENTER).bPressed) CPU6502.Step();
+        if (GetKey(olc::Key::SPACE).bPressed) running = !running;
+        if (GetKey(olc::Key::ENTER).bPressed || running) CPU6502.Step();
         if (GetKey(olc::Key::SHIFT).bPressed) {
             if (!ZPage) {
                 ZPage = new MemoryGUI(&CPU6502);
