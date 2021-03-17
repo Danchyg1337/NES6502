@@ -74,12 +74,10 @@ public:
     }
 
     void Call() {
+        //memory[0xfe] = rand() % 256;
         uint8_t opcode = Fetch();
         if (instructions.find(opcode) == instructions.end()) InvalidCommand(opcode);
-        else {
-            (this->*instructions[opcode].mode)(instructions[opcode].command);
-            printf("%s\n", instructions[opcode].name.data());
-        }
+        else (this->*instructions[opcode].mode)(instructions[opcode].command);
     }
 
     void InvalidCommand(uint8_t code) {
@@ -98,8 +96,9 @@ public:
         (this->*command)();
     }
 
-    void ACC() {
-        
+    void ACC(void (CPU::* command)()) {
+        isValueRegister = false;
+        (this->*command)();
     }
 
     void IMM(void (CPU::*command)()) {
@@ -164,12 +163,22 @@ public:
         (this->*command)();
     }
 
-    void IXIR(void (CPU::* command)()) {
-
+    void INDX(void (CPU::* command)()) {
+        uint8_t Xval = Fetch();
+        uint8_t pos = Xval + int8_t(X);
+        value = memory[pos];
+        value |= uint16_t(memory[pos + 1]) << 8;
+        isValueRegister = true;
+        (this->*command)();
     }
 
-    void IRIX(void (CPU::* command)()) {
-
+    void INDY(void (CPU::* command)()) {
+        uint8_t Yval = Fetch();
+        value = memory[Yval];
+        value |= uint16_t(memory[Yval + 1]) << 8;
+        value += int8_t(Y);
+        isValueRegister = true;
+        (this->*command)();
     }
 
     //instructions
@@ -226,6 +235,15 @@ public:
         SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
+    void SBC() {                                        //not compeled
+        uint8_t Acopy = A;
+        A = A - value - (1 - (SR & FLAGS::C));
+        SetFlag(FLAGS::C, A > Acopy);
+        SetFlag(FLAGS::Z, A == 0);
+        //SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);           //not valid, tbc
+        SetFlag(FLAGS::N, FLAGS::N & A);
+    }
+
     void AND() {
         if (isValueRegister) A &= memory[value];
         else A &= value;
@@ -267,35 +285,41 @@ public:
     }
 
     void CMP() {
-        uint8_t res;
-        if (isValueRegister)
+        uint8_t res, val = value;
+        if (isValueRegister) {
             res = A - memory[value];
+            val = memory[value];
+        }
         else
             res = A - value;
-        SetFlag(FLAGS::C, A >= value);
-        SetFlag(FLAGS::Z, A == value);
+        SetFlag(FLAGS::C, A >= val);
+        SetFlag(FLAGS::Z, A == val);
         SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
     void CPX() {
-        uint8_t res;
-        if (isValueRegister)
+        uint8_t res, val = value;
+        if (isValueRegister) {
             res = X - memory[value];
+            val = memory[value];
+        }
         else
             res = X - value;
-        SetFlag(FLAGS::C, X >= value);
-        SetFlag(FLAGS::Z, X == value);
+        SetFlag(FLAGS::C, X >= val);
+        SetFlag(FLAGS::Z, X == val);
         SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
     void CPY() {
-        uint8_t res;
-        if (isValueRegister)
+        uint8_t res, val = value;
+        if (isValueRegister) {
             res = Y - memory[value];
+            val = memory[value];
+        }
         else
             res = Y - value;
-        SetFlag(FLAGS::C, Y >= value);
-        SetFlag(FLAGS::Z, Y == value);
+        SetFlag(FLAGS::C, Y >= val);
+        SetFlag(FLAGS::Z, Y == val);
         SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
@@ -306,6 +330,16 @@ public:
 
     void BNE() {                                        //not completed
         if (SR & FLAGS::Z) return;
+        PC += int8_t(value);
+    }
+
+    void BPL() {                                        //not completed
+        if (SR & FLAGS::N) return;
+        PC += int8_t(value);
+    }
+
+    void BCC() {                                        //not completed
+        if (SR & FLAGS::C) return;
         PC += int8_t(value);
     }
 
@@ -340,6 +374,12 @@ public:
         SetFlag(FLAGS::N, X & FLAGS::N);
     }
 
+    void DEC() {
+        memory[value]--;
+        SetFlag(FLAGS::Z, memory[value] == 0);
+        SetFlag(FLAGS::N, memory[value] & FLAGS::N);
+    }
+
     void TXA() {
         A = X;
         SetFlag(FLAGS::Z, A == 0);
@@ -354,6 +394,26 @@ public:
     void PLA() {
         SP++;
         A = memory[stackBottom + SP];
+    }
+
+    void LSR() {
+        uint8_t* memptr;
+        if (isValueRegister)
+            memptr = &memory[value];
+        else 
+            memptr = &A;
+        SetFlag(FLAGS::C, *memptr & FLAGS::C);
+        *memptr >>= 1;
+        SetFlag(FLAGS::Z, *memptr == 0);
+        SetFlag(FLAGS::N, *memptr & FLAGS::N);
+    }
+
+    void SEC() {
+        SetFlag(FLAGS::C, true);
+    }
+
+    void NOP() {
+        return;
     }
 
     struct Command {
@@ -389,6 +449,8 @@ public:
         {0x8D, {&CPU::STA, &CPU::ABS,  "STA", 3, 5}},
         {0x9D, {&CPU::STA, &CPU::ABSX, "STA", 3, 5}},
         {0x99, {&CPU::STA, &CPU::ABSY, "STA", 3, 3}},
+        {0x91, {&CPU::STA, &CPU::INDY, "STA", 2, 6}},
+        {0x81, {&CPU::STA, &CPU::INDX, "STA", 2, 6}},
         {0x86, {&CPU::STX, &CPU::ZPG,  "STX", 2, 3}},
         {0x84, {&CPU::STY, &CPU::ZPG,  "STY", 2, 3}},
         {0x20, {&CPU::JSR, &CPU::ABS,  "JSR", 3, 6}},
@@ -402,8 +464,10 @@ public:
         {0xC0, {&CPU::CPY, &CPU::IMM,  "CPY", 2, 2}},
         {0xC4, {&CPU::CPY, &CPU::ZPG,  "CPY", 2, 3}},
         {0xCC, {&CPU::CPY, &CPU::ABS,  "CPY", 2, 4}},
-        {0xF0, {&CPU::BEQ, &CPU::RLT,  "BEQ", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
-        {0xD0, {&CPU::BNE, &CPU::RLT,  "BNE", 2, 2}},            // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0xF0, {&CPU::BEQ, &CPU::RLT,  "BEQ", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0xD0, {&CPU::BNE, &CPU::RLT,  "BNE", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x10, {&CPU::BPL, &CPU::RLT,  "BPL", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x90, {&CPU::BCC, &CPU::RLT,  "BCC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
         {0x4C, {&CPU::JMP, &CPU::ABS,  "JMP", 3, 3}},
         {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}},
@@ -413,34 +477,38 @@ public:
         {0xEE, {&CPU::INC, &CPU::ABS,  "INC", 3, 6}},
         {0xFE, {&CPU::INC, &CPU::ABSX, "INC", 3, 7}},
         {0xCA, {&CPU::DEX, &CPU::IMP,  "DEX", 1, 2}},
+        {0xC6, {&CPU::DEC, &CPU::ZPG,  "DEC", 2, 5}},
+        {0xD6, {&CPU::DEC, &CPU::ZPGX, "DEC", 2, 6}},
+        {0xCE, {&CPU::DEC, &CPU::ABS,  "DEC", 3, 6}},
+        {0xDE, {&CPU::DEC, &CPU::ABSX, "DEC", 3, 7}},
         {0x8A, {&CPU::TXA, &CPU::IMP,  "TXA", 1, 2}},
         {0x48, {&CPU::PHA, &CPU::IMP,  "PHA", 1, 3}},
-        {0x68, {&CPU::PLA, &CPU::IMP,  "PLA", 1, 4}}
+        {0x68, {&CPU::PLA, &CPU::IMP,  "PLA", 1, 4}},
+        {0xEA, {&CPU::NOP, &CPU::IMP,  "NOP", 1, 2}},
+        {0x4A, {&CPU::LSR, &CPU::ACC,  "LSR", 1, 2}},
+        {0x46, {&CPU::LSR, &CPU::ZPG,  "LSR", 2, 5}},
+        {0x56, {&CPU::LSR, &CPU::ZPGX, "LSR", 2, 6}},
+        {0x4E, {&CPU::LSR, &CPU::ABS,  "LSR", 3, 6}},
+        {0x5E, {&CPU::LSR, &CPU::ABSX, "LSR", 3, 7}},
+        {0x38, {&CPU::SEC, &CPU::IMP,  "SEC", 1, 2}},
+        {0xE9, {&CPU::SBC, &CPU::IMM,  "SBC", 2, 2}}
     };
 
 };
-
-std::mutex lock;
 
 class MemoryGUI : public olc::PixelGameEngine {
     CPU* cpu;
 public:
     MemoryGUI(CPU* cpu) {
-        lock.lock();
         this->cpu = cpu;
-        lock.unlock();
-        
     }
     bool OnUserCreate() override
     {
-        lock.lock();
         if (!cpu->memory) return false;
-        lock.unlock();
         return true;
     }
     bool OnUserUpdate(float fElapsedTime) override
     {
-        lock.lock();
         Clear(olc::Pixel(255, 128, 255));
         DrawString(5, 5, "Zero Page", olc::RED, 1);
 
@@ -466,8 +534,6 @@ public:
             }
             DrawString(235, 15 + (cpu->stackBottom + 0xFF - row) * 4, line, olc::RED, 1);
         }
-
-        lock.unlock();
         return true;
     }
 };
@@ -586,6 +652,7 @@ public:
         if (GetKey(olc::Key::ENTER).bPressed || running) CPU6502.Step();
         if (CPU6502.SR & CPU::FLAGS::B) {
             running = false;
+            //std::cout << "END!!!!\n";
             //CPU6502.Reset();
         }
         if (GetKey(olc::Key::SHIFT).bPressed) {
