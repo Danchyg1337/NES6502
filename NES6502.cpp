@@ -12,8 +12,8 @@ class CPU {
 public:
     CPU() {}
 
+    int ramsize = 2048 * 32;
     void load (uint8_t* program, size_t size) {
-        int ramsize = 2048 * 32;
         memory = new uint8_t[ramsize];
         for (int t = 0; t < ramsize; t++) memory[t] = 0;
         Reset();
@@ -50,6 +50,9 @@ public:
         SP = 0xFF;
         PC = startAddr;
         SR = FLAGS::IGNORED;
+        A = 0;
+        X = 0;
+        Y = 0;
         system("cls");
     }
 
@@ -112,13 +115,13 @@ public:
     }
 
     void ZPGX(void (CPU::* command)()) {
-        value = uint8_t(Fetch() + X);
+        value = uint8_t(Fetch() + int8_t(X));
         isValueRegister = true;
         (this->*command)();
     }
 
     void ZPGY(void (CPU::* command)()) {
-        value = uint8_t(Fetch() + Y);
+        value = uint8_t(Fetch() + int8_t(Y));
         isValueRegister = true;
         (this->*command)();
     }
@@ -140,7 +143,7 @@ public:
     void ABSX(void (CPU::* command)()) {
         uint16_t LSB = Fetch();
         uint16_t MSB = Fetch();
-        value = ((MSB << 8) | LSB) + X;
+        value = ((MSB << 8) | LSB) + int8_t(X);
         isValueRegister = true;
         (this->*command)();
     }
@@ -148,7 +151,7 @@ public:
     void ABSY(void (CPU::* command)()) {
         uint16_t LSB = Fetch();
         uint16_t MSB = Fetch();
-        value = ((MSB << 8) | LSB) + Y;
+        value = ((MSB << 8) | LSB) + int8_t(Y);
         isValueRegister = true;
         (this->*command)();
     }
@@ -156,7 +159,7 @@ public:
     void IND(void (CPU::* command)()) {
         uint16_t LSB = Fetch();
         uint16_t MSB = Fetch();
-        value = ((MSB << 8) | LSB) + Y;
+        value = ((MSB << 8) | LSB);
         isValueRegister = true;
         (this->*command)();
     }
@@ -218,6 +221,9 @@ public:
         uint8_t edge = std::min(A, (uint8_t)value);
         A = A + value + (SR & FLAGS::C);
         SetFlag(FLAGS::C, A < edge);
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
     void AND() {
