@@ -8,16 +8,27 @@
 class CPU {
 public:
     int ramsize = 2048 * 32;
-    void load (uint8_t* program, size_t size) {
+    bool Load(uint8_t* program, size_t size, bool isRawCode = false) {
+        if (!isRawCode) {
+            uint8_t header[16];
+            memcpy(header, program, 16);
+            if (header[0] != 'N' || header[1] != 'E' || header[2] != 'S' || header[3] != 0x1A) {
+                printf("Unknown format.");
+                return false;
+            }
+            //tbc
+        }
+
         memory = new uint8_t[ramsize];
         for (int t = 0; t < ramsize; t++) memory[t] = 0;
-        Reset ();
-        memcpy (&memory[PC], program, size);
+        Reset();
+        memcpy(&memory[PC], program, size);
+        return true;
     }
+
     bool running = false;
 
-
-    uint8_t* memory;
+    uint8_t* memory = nullptr;
 
     uint16_t value = 0;
     bool isValueRegister = false;
@@ -28,9 +39,9 @@ public:
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register
     uint8_t  Y = 0;          //Y Register
-    uint8_t  SP;             //Stack Pointer
-    uint16_t PC;             //Program Counter
-    uint8_t  SR;             //Status Register
+    uint8_t  SP = 0;         //Stack Pointer
+    uint16_t PC = 0;         //Program Counter
+    uint8_t  SR = 0;         //Status Register
 
     enum FLAGS : uint8_t {
         C = 1,
@@ -43,45 +54,84 @@ public:
         N = 128
     };
 
-    void Reset () {
+    void Reset() {
         SP = 0xFF;
         PC = startAddr;
         SR = FLAGS::IGNORED;
         A = 0;
         X = 0;
         Y = 0;
-        system ("cls");
+        system("cls");
     }
 
 
-    uint8_t Fetch () {
+    uint8_t Fetch() {
         uint8_t fetched = memory[PC];
         PC++;
         return fetched;
     }
 
-    void Run () {
-        while (running) 
-            Call();
-        
+    void Write(uint16_t addr, uint8_t value) {
+        //RAM
+        if (addr >= 0x0000 && addr < 0x0800) {
+            memory[addr] = value;
+        }
+        //Mirrors of RAM
+        else if (addr >= 0x0800 && addr < 0x2000) {
+            Write(addr % 0x0800, value);
+        }
+        //PPU Registers
+        else if (addr >= 0x2000 && addr < 0x2008) {
+            memory[addr] = value;
+        }
+        //Mirrors of PPU Registers
+        else if (addr >= 0x2008 && addr < 0x4000) {
+            Write((addr - 0x2000) % 0x0008, value);
+        }
+        //APU Registers
+        else if (addr >= 0x4000 && addr < 0x4020) {
+            memory[addr] = value;
+        }
+        //Cartridge Expansion ROM
+        else if (addr >= 0x4000 && addr < 0x6000) {
+            memory[addr] = value;
+        }
+        //SRAM
+        else if (addr >= 0x6000 && addr < 0x8000) {
+            memory[addr] = value;
+        }
+        //PRG-ROM
+        else if (addr >= 0x8000 && addr < 0xC000) {
+            memory[addr] = value;
+        }
+        //PRG-ROM
+        else if (addr >= 0xC000 && addr < 0xFFFF) {
+            memory[addr] = value;
+        }
     }
 
-    void Step () {
+    void Run() {
+        while (!(SR & FLAGS::B)) {
+            Call();
+        }
+    }
+
+    void Step() {
         Call();
     }
 
-    void Call () {
+    void Call() {
         //memory[0xfe] = rand() % 256;
-        uint8_t opcode = Fetch ();
-        if (instructions.find (opcode) == instructions.end ()) InvalidCommand (opcode);
+        uint8_t opcode = Fetch();
+        if (instructions.find(opcode) == instructions.end()) InvalidCommand(opcode);
         else (this->*instructions[opcode].mode)(instructions[opcode].command);
     }
 
-    void InvalidCommand (uint8_t code) {
-        printf ("Invalid command : %02X\n", code);
+    void InvalidCommand(uint8_t code) {
+        printf("Invalid command : %02X\n", code);
     }
 
-    void SetFlag (FLAGS flag, bool set) {
+    void SetFlag(FLAGS flag, bool set) {
         if (set)
             SR = SR | flag;
         else
@@ -89,199 +139,199 @@ public:
     }
 
     //addressing modes 
-    void IMP (void (CPU::* command)()) {
+    void IMP(void (CPU::* command)()) {
         (this->*command)();
     }
 
-    void ACC (void (CPU::* command)()) {
+    void ACC(void (CPU::* command)()) {
         isValueRegister = false;
         (this->*command)();
     }
 
-    void IMM (void (CPU::* command)()) {
-        value = Fetch ();
+    void IMM(void (CPU::* command)()) {
+        value = Fetch();
         isValueRegister = false;
         (this->*command)();
     }
 
-    void ZPG (void (CPU::* command)()) {
-        value = Fetch ();
+    void ZPG(void (CPU::* command)()) {
+        value = Fetch();
         isValueRegister = true;
         (this->*command)();
     }
 
-    void ZPGX (void (CPU::* command)()) {
-        value = uint8_t (Fetch () + int8_t (X));
+    void ZPGX(void (CPU::* command)()) {
+        value = uint8_t(Fetch() + int8_t(X));
         isValueRegister = true;
         (this->*command)();
     }
 
-    void ZPGY (void (CPU::* command)()) {
-        value = uint8_t (Fetch () + int8_t (Y));
+    void ZPGY(void (CPU::* command)()) {
+        value = uint8_t(Fetch() + int8_t(Y));
         isValueRegister = true;
         (this->*command)();
     }
 
-    void RLT (void (CPU::* command)()) {
-        value = Fetch ();
+    void RLT(void (CPU::* command)()) {
+        value = Fetch();
         isValueRegister = false;
         (this->*command)();
     }
 
-    void ABS (void (CPU::* command)()) {
-        uint16_t LSB = Fetch ();
-        uint16_t MSB = Fetch ();
+    void ABS(void (CPU::* command)()) {
+        uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
         value = (MSB << 8) | LSB;
         isValueRegister = true;
         (this->*command)();
     }
 
-    void ABSX (void (CPU::* command)()) {
-        uint16_t LSB = Fetch ();
-        uint16_t MSB = Fetch ();
-        value = ((MSB << 8) | LSB) + int8_t (X);
+    void ABSX(void (CPU::* command)()) {
+        uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
+        value = ((MSB << 8) | LSB) + int8_t(X);
         isValueRegister = true;
         (this->*command)();
     }
 
-    void ABSY (void (CPU::* command)()) {
-        uint16_t LSB = Fetch ();
-        uint16_t MSB = Fetch ();
-        value = ((MSB << 8) | LSB) + int8_t (Y);
+    void ABSY(void (CPU::* command)()) {
+        uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
+        value = ((MSB << 8) | LSB) + int8_t(Y);
         isValueRegister = true;
         (this->*command)();
     }
 
-    void IND (void (CPU::* command)()) {
-        uint16_t LSB = Fetch ();
-        uint16_t MSB = Fetch ();
+    void IND(void (CPU::* command)()) {
+        uint16_t LSB = Fetch();
+        uint16_t MSB = Fetch();
         value = ((MSB << 8) | LSB);
         isValueRegister = true;
         (this->*command)();
     }
 
-    void INDX (void (CPU::* command)()) {
-        uint8_t Xval = Fetch ();
-        uint8_t pos = Xval + int8_t (X);
+    void INDX(void (CPU::* command)()) {
+        uint8_t Xval = Fetch();
+        uint8_t pos = Xval + int8_t(X);
         value = memory[pos];
-        value |= uint16_t (memory[pos + 1]) << 8;
+        value |= uint16_t(memory[pos + 1]) << 8;
         isValueRegister = true;
         (this->*command)();
     }
 
-    void INDY (void (CPU::* command)()) {
-        uint8_t Yval = Fetch ();
+    void INDY(void (CPU::* command)()) {
+        uint8_t Yval = Fetch();
         value = memory[Yval];
-        value |= uint16_t (memory[Yval + 1]) << 8;
-        value += int8_t (Y);
+        value |= uint16_t(memory[Yval + 1]) << 8;
+        value += int8_t(Y);
         isValueRegister = true;
         (this->*command)();
     }
 
     //instructions
-    void LDA () {
+    void LDA() {
         if (isValueRegister) A = memory[value];
         else A = value;
-        SetFlag (FLAGS::Z, A == 0);
-        SetFlag (FLAGS::N, FLAGS::N & A);
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
-    void LDX () {
+    void LDX() {
         if (isValueRegister) X = memory[value];
         else X = value;
-        SetFlag (FLAGS::Z, X == 0);
-        SetFlag (FLAGS::N, FLAGS::N & X);
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, FLAGS::N & X);
     }
 
-    void LDY () {
+    void LDY() {
         if (isValueRegister) Y = memory[value];
         else Y = value;
-        SetFlag (FLAGS::Z, Y == 0);
-        SetFlag (FLAGS::N, FLAGS::N & Y);
+        SetFlag(FLAGS::Z, Y == 0);
+        SetFlag(FLAGS::N, FLAGS::N & Y);
     }
 
-    void TAX () {
+    void TAX() {
         X = A;
-        SetFlag (FLAGS::Z, X == 0);
-        SetFlag (FLAGS::N, FLAGS::N & X);
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, FLAGS::N & X);
     }
 
-    void INX () {
+    void INX() {
         X++;
-        SetFlag (FLAGS::Z, X == 0);
-        SetFlag (FLAGS::N, FLAGS::N & X);
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, FLAGS::N & X);
     }
 
-    void INY () {
+    void INY() {
         Y++;
-        SetFlag (FLAGS::Z, Y == 0);
-        SetFlag (FLAGS::N, FLAGS::N & Y);
+        SetFlag(FLAGS::Z, Y == 0);
+        SetFlag(FLAGS::N, FLAGS::N & Y);
     }
 
-    void BRK () {                                        //not completed
+    void BRK() {                                        //not completed
         memory[SP] = PC;
-        SetFlag (FLAGS::B, true);
+        SetFlag(FLAGS::B, true);
     }
 
-    void ADC () {                                        //not completed
-        uint8_t edge = std::min (A, (uint8_t)value);
+    void ADC() {                                        //not compeled
+        uint8_t edge = std::min(A, (uint8_t)value);
         A = A + value + (SR & FLAGS::C);
-        SetFlag (FLAGS::C, A < edge);
-        SetFlag (FLAGS::Z, A == 0);
-        SetFlag (FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);
-        SetFlag (FLAGS::N, FLAGS::N & A);
+        SetFlag(FLAGS::C, A < edge);
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
-    void SBC () {                                        //not completed
+    void SBC() {                                        //not compeled
         uint8_t Acopy = A;
         A = A - value - (1 - (SR & FLAGS::C));
-        SetFlag (FLAGS::C, A > Acopy);
-        SetFlag (FLAGS::Z, A == 0);
+        SetFlag(FLAGS::C, A > Acopy);
+        SetFlag(FLAGS::Z, A == 0);
         //SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);           //not valid, tbc
-        SetFlag (FLAGS::N, FLAGS::N & A);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
-    void AND () {
+    void AND() {
         if (isValueRegister) A &= memory[value];
         else A &= value;
-        SetFlag (FLAGS::Z, A == 0);
-        SetFlag (FLAGS::N, FLAGS::N & A);
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
-    void STA () {
+    void STA() {
         memory[value] = A;
     }
-    void STX () {
+    void STX() {
         memory[value] = X;
     }
-    void STY () {
+    void STY() {
         memory[value] = Y;
     }
 
-    void JSR () {
-        memory[stackBottom + SP] = (PC) >> 8;
+    void JSR() {
+        memory[stackBottom + SP] = (PC - 1) >> 8;
         SP--;
-        memory[stackBottom + SP] = PC;
+        memory[stackBottom + SP] = PC - 1;
         SP--;
         PC = value;
     }
 
-    void RTS () {
+    void RTS() {
         uint16_t toPC;
         SP++;
         toPC = memory[stackBottom + SP];
         memory[stackBottom + SP] = 0x00;
         SP++;
-        toPC |= uint16_t (memory[stackBottom + SP]) << 8;
+        toPC |= uint16_t(memory[stackBottom + SP]) << 8;
         memory[stackBottom + SP] = 0x00;
-        PC = toPC;
+        PC = toPC + 1;
     }
 
-    void CLC () {
-        SetFlag (FLAGS::C, false);
+    void CLC() {
+        SetFlag(FLAGS::C, false);
     }
 
-    void CMP () {
+    void CMP() {
         uint8_t res, val = value;
         if (isValueRegister) {
             res = A - memory[value];
@@ -289,12 +339,12 @@ public:
         }
         else
             res = A - value;
-        SetFlag (FLAGS::C, A >= val);
-        SetFlag (FLAGS::Z, A == val);
-        SetFlag (FLAGS::N, FLAGS::N & res);
+        SetFlag(FLAGS::C, A >= val);
+        SetFlag(FLAGS::Z, A == val);
+        SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
-    void CPX () {
+    void CPX() {
         uint8_t res, val = value;
         if (isValueRegister) {
             res = X - memory[value];
@@ -302,12 +352,12 @@ public:
         }
         else
             res = X - value;
-        SetFlag (FLAGS::C, X >= val);
-        SetFlag (FLAGS::Z, X == val);
-        SetFlag (FLAGS::N, FLAGS::N & res);
+        SetFlag(FLAGS::C, X >= val);
+        SetFlag(FLAGS::Z, X == val);
+        SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
-    void CPY () {
+    void CPY() {
         uint8_t res, val = value;
         if (isValueRegister) {
             res = Y - memory[value];
@@ -315,101 +365,101 @@ public:
         }
         else
             res = Y - value;
-        SetFlag (FLAGS::C, Y >= val);
-        SetFlag (FLAGS::Z, Y == val);
-        SetFlag (FLAGS::N, FLAGS::N & res);
+        SetFlag(FLAGS::C, Y >= val);
+        SetFlag(FLAGS::Z, Y == val);
+        SetFlag(FLAGS::N, FLAGS::N & res);
     }
 
-    void BEQ () {                                        //not completed
+    void BEQ() {                                        //not completed
         if (!(SR & FLAGS::Z)) return;
-        PC += int8_t (value);
+        PC += int8_t(value);
     }
 
-    void BNE () {                                        //not completed
+    void BNE() {                                        //not completed
         if (SR & FLAGS::Z) return;
-        PC += int8_t (value);
+        PC += int8_t(value);
     }
 
-    void BPL () {                                        //not completed
+    void BPL() {                                        //not completed
         if (SR & FLAGS::N) return;
-        PC += int8_t (value);
+        PC += int8_t(value);
     }
 
-    void BCC () {                                        //not completed
+    void BCC() {                                        //not completed
         if (SR & FLAGS::C) return;
-        PC += int8_t (value);
+        PC += int8_t(value);
     }
 
-    void ORA () {
+    void ORA() {
         if (isValueRegister)
             A |= memory[value];
         else
             A |= value;
-        SetFlag (FLAGS::Z, A == 0);
-        SetFlag (FLAGS::N, FLAGS::N & A);
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
-    void JMP () {
+    void JMP() {
         PC = value;
     }
 
-    void BIT () {
-        SetFlag (FLAGS::N, value & FLAGS::N);
-        SetFlag (FLAGS::V, value & FLAGS::V);
-        SetFlag (FLAGS::Z, value & A);
+    void BIT() {
+        SetFlag(FLAGS::N, value & FLAGS::N);
+        SetFlag(FLAGS::V, value & FLAGS::V);
+        SetFlag(FLAGS::Z, value & A);
     }
 
-    void INC () {
+    void INC() {
         memory[value]++;
-        SetFlag (FLAGS::Z, memory[value] == 0);
-        SetFlag (FLAGS::N, memory[value] & FLAGS::N);
+        SetFlag(FLAGS::Z, memory[value] == 0);
+        SetFlag(FLAGS::N, memory[value] & FLAGS::N);
     }
 
-    void DEX () {
+    void DEX() {
         X--;
-        SetFlag (FLAGS::Z, X == 0);
-        SetFlag (FLAGS::N, X & FLAGS::N);
+        SetFlag(FLAGS::Z, X == 0);
+        SetFlag(FLAGS::N, X & FLAGS::N);
     }
 
-    void DEC () {
+    void DEC() {
         memory[value]--;
-        SetFlag (FLAGS::Z, memory[value] == 0);
-        SetFlag (FLAGS::N, memory[value] & FLAGS::N);
+        SetFlag(FLAGS::Z, memory[value] == 0);
+        SetFlag(FLAGS::N, memory[value] & FLAGS::N);
     }
 
-    void TXA () {
+    void TXA() {
         A = X;
-        SetFlag (FLAGS::Z, A == 0);
-        SetFlag (FLAGS::N, A & FLAGS::N);
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, A & FLAGS::N);
     }
 
-    void PHA () {
+    void PHA() {
         memory[stackBottom + SP] = A;
         SP--;
     }
 
-    void PLA () {
+    void PLA() {
         SP++;
         A = memory[stackBottom + SP];
     }
 
-    void LSR () {
+    void LSR() {
         uint8_t* memptr;
         if (isValueRegister)
             memptr = &memory[value];
         else
             memptr = &A;
-        SetFlag (FLAGS::C, *memptr & FLAGS::C);
+        SetFlag(FLAGS::C, *memptr & FLAGS::C);
         *memptr >>= 1;
-        SetFlag (FLAGS::Z, *memptr == 0);
-        SetFlag (FLAGS::N, *memptr & FLAGS::N);
+        SetFlag(FLAGS::Z, *memptr == 0);
+        SetFlag(FLAGS::N, *memptr & FLAGS::N);
     }
 
-    void SEC () {
-        SetFlag (FLAGS::C, true);
+    void SEC() {
+        SetFlag(FLAGS::C, true);
     }
 
-    void NOP () {
+    void NOP() {
         return;
     }
 

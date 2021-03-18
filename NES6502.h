@@ -26,7 +26,7 @@ public:
             return false;
         }
         std::vector<uint8_t> program (std::istreambuf_iterator<char> (file), {});
-        CPU6502.load (program.data (), program.size ());
+        CPU6502.Load (program.data (), program.size (), true);
         return true;
     }
 
