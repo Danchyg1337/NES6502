@@ -7,8 +7,6 @@
 
 class CPU {
 public:
-    CPU () {}
-
     int ramsize = 2048 * 32;
     void load (uint8_t* program, size_t size) {
         memory = new uint8_t[ramsize];
@@ -16,6 +14,8 @@ public:
         Reset ();
         memcpy (&memory[PC], program, size);
     }
+    bool running = false;
+
 
     uint8_t* memory;
 
@@ -61,16 +61,13 @@ public:
     }
 
     void Run () {
-        while (!(SR & FLAGS::B)) {
-            Call ();
-        }
+        while (running) 
+            Call();
+        
     }
 
     void Step () {
-        printf ("STEP");
-
-        Call ();
-
+        Call();
     }
 
     void Call () {
@@ -226,7 +223,7 @@ public:
         SetFlag (FLAGS::B, true);
     }
 
-    void ADC () {                                        //not compeled
+    void ADC () {                                        //not completed
         uint8_t edge = std::min (A, (uint8_t)value);
         A = A + value + (SR & FLAGS::C);
         SetFlag (FLAGS::C, A < edge);
@@ -235,7 +232,7 @@ public:
         SetFlag (FLAGS::N, FLAGS::N & A);
     }
 
-    void SBC () {                                        //not compeled
+    void SBC () {                                        //not completed
         uint8_t Acopy = A;
         A = A - value - (1 - (SR & FLAGS::C));
         SetFlag (FLAGS::C, A > Acopy);
@@ -262,9 +259,9 @@ public:
     }
 
     void JSR () {
-        memory[stackBottom + SP] = (PC - 1) >> 8;
+        memory[stackBottom + SP] = (PC) >> 8;
         SP--;
-        memory[stackBottom + SP] = PC - 1;
+        memory[stackBottom + SP] = PC;
         SP--;
         PC = value;
     }
@@ -277,7 +274,7 @@ public:
         SP++;
         toPC |= uint16_t (memory[stackBottom + SP]) << 8;
         memory[stackBottom + SP] = 0x00;
-        PC = toPC + 1;
+        PC = toPC;
     }
 
     void CLC () {
