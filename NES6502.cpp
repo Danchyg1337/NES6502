@@ -10,17 +10,26 @@
 
 class CPU {
 public:
-    CPU() {}
-
     int ramsize = 2048 * 32;
-    void load (uint8_t* program, size_t size) {
+    bool Load (uint8_t* program, size_t size, bool isRawCode = false) {
+        if (!isRawCode) {
+            uint8_t header[16];
+            memcpy(header, program, 16);
+            if (header[0] != 'N' || header[1] != 'E' || header[2] != 'S' || header[3] != 0x1A) {
+                printf("Unknown format.");
+                return false;
+            }
+            //tbc
+        }
+
         memory = new uint8_t[ramsize];
         for (int t = 0; t < ramsize; t++) memory[t] = 0;
         Reset();
-        memcpy (&memory[PC], program, size);
+        memcpy(&memory[PC], program, size);
+        return true;
     }
 
-    uint8_t* memory;
+    uint8_t* memory = nullptr;
 
     uint16_t value = 0;
     bool isValueRegister = false;
@@ -31,9 +40,9 @@ public:
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register
     uint8_t  Y = 0;          //Y Register
-    uint8_t  SP;             //Stack Pointer
-    uint16_t PC;             //Program Counter
-    uint8_t  SR;             //Status Register
+    uint8_t  SP = 0;         //Stack Pointer
+    uint16_t PC = 0;         //Program Counter
+    uint8_t  SR = 0;         //Status Register
 
     enum FLAGS : uint8_t{
         C       = 1,
@@ -61,6 +70,45 @@ public:
         uint8_t fetched = memory[PC];
         PC++;
         return fetched;
+    }
+
+    void Write(uint16_t addr, uint8_t value) {
+        //RAM
+        if (addr >= 0x0000 && addr <  0x0800) {
+            memory[addr] = value;
+        }
+        //Mirrors of RAM
+        else if (addr >= 0x0800 && addr < 0x2000) {
+            Write(addr % 0x0800, value);
+        }
+        //PPU Registers
+        else if (addr >= 0x2000 && addr < 0x2008) {
+            memory[addr] = value;
+        }
+        //Mirrors of PPU Registers
+        else if (addr >= 0x2008 && addr < 0x4000) {
+            Write((addr - 0x2000) % 0x0008, value);
+        }
+        //APU Registers
+        else if (addr >= 0x4000 && addr < 0x4020) {
+            memory[addr] = value;
+        }
+        //Cartridge Expansion ROM
+        else if (addr >= 0x4000 && addr < 0x6000) {
+            memory[addr] = value;
+        }
+        //SRAM
+        else if (addr >= 0x6000 && addr < 0x8000) {
+            memory[addr] = value;
+        }
+        //PRG-ROM
+        else if (addr >= 0x8000 && addr < 0xC000) {
+            memory[addr] = value;
+        }
+        //PRG-ROM
+        else if (addr >= 0xC000 && addr < 0xFFFF) {
+            memory[addr] = value;
+        }
     }
 
     void Run() {
@@ -566,7 +614,7 @@ public:
             return false;
         }
         std::vector<uint8_t> program(std::istreambuf_iterator<char>(file), {});
-        CPU6502.load(program.data(), program.size());
+        CPU6502.Load(program.data(), program.size(), true);
         return true;
     }
 
