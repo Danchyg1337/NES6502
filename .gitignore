@@ -15,6 +15,7 @@ HxD.exe
 *.6502.bak
 HxD.exe.lnk
 CppProperties.json
+*.log
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
