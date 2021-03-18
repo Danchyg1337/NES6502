@@ -43,7 +43,7 @@ static void glfw_error_callback (int error, const char* description)
 
 
 
-std::deque<std::string> instructions_dump (CPU *CPU6502) {
+std::deque<std::string> instructions_dump(CPU *CPU6502, uint16_t &currentLine) {
     std::deque<std::string> queque_;
 
     uint16_t local_pc = CPU6502->startAddr;
@@ -68,11 +68,12 @@ std::deque<std::string> instructions_dump (CPU *CPU6502) {
 
         std::string line (9, ' ');
         sprintf_s (const_cast<char*>(line.data ()), line.size (), "%04X %s", local_pc, instruction.name.data ());
+        line[8] = ' ';
 
         for (uint8_t i = 1; i < instruction.bytes; i++) {
             std::string buff (3, ' ');
             sprintf_s (const_cast<char*>(buff.data ()), buff.size (), "%02X", CPU6502->memory[local_pc + i]);
-            line += buff;
+            line += buff.substr(0, 2) + ' ';
         }
 
         queque_.push_back (line);
@@ -87,6 +88,7 @@ std::deque<std::string> instructions_dump (CPU *CPU6502) {
             current--;
         }
     }
+    currentLine = current;
     return queque_;
 }
 
@@ -175,12 +177,12 @@ int BasicInitGui (NES *nes_cpu) {
         {
             ImGui::Begin ("NES");
 
-            ImGui::Text ("Accumulator %02X", nes_cpu->CPU6502->A);
-            ImGui::Text ("X Registe %02X", nes_cpu->CPU6502->X);
-            ImGui::Text ("Y Register %02X", nes_cpu->CPU6502->Y);
-            ImGui::Text ("Stack Pointer %02X", nes_cpu->CPU6502->SP);
-            ImGui::Text ("Program Counter %04X", nes_cpu->CPU6502->PC);
-            ImGui::Text ("Status Register %c %c %c %c %c %c %c %c", BYTE_TO_BINARY (nes_cpu->CPU6502->SP));
+            ImGui::Text ("Accumulator %02X", nes_cpu->CPU6502.A);
+            ImGui::Text ("X Register %02X", nes_cpu->CPU6502.X);
+            ImGui::Text ("Y Register %02X", nes_cpu->CPU6502.Y);
+            ImGui::Text ("Stack Pointer %02X", nes_cpu->CPU6502.SP);
+            ImGui::Text ("Program Counter %04X", nes_cpu->CPU6502.PC);
+            ImGui::Text ("Status Register %c %c %c %c %c %c %c %c", BYTE_TO_BINARY (nes_cpu->CPU6502.SR));
 
             /*
             printf ("Accumulator %02X\n", nes_cpu->CPU6502->A);
@@ -193,66 +195,71 @@ int BasicInitGui (NES *nes_cpu) {
             //ImGui::SliderFloat ("float", &f, 0.0f, 1.0f);           
             //ImGui::ColorEdit3 ("clear color", (float*)&clear_color); 
 
-            if (ImGui::Button ("RUN"))
-                nes_cpu->CPU6502->Run ();
-
-            if (ImGui::Button ("STEP")) {
-                ImGui::SameLine ();
-                nes_cpu->CPU6502->Step ();
+            if (ImGui::Button("RUN")) {
+                nes_cpu->CPU6502.running = !nes_cpu->CPU6502.running;
+                //nes_cpu->CPU6502->Run();
             }
+            ImGui::SameLine();
+            if (ImGui::Button("STEP") || nes_cpu->CPU6502.running)
+                nes_cpu->CPU6502.Step();
+            ImGui::SameLine();
+            if (ImGui::Button("RESET")) 
+                nes_cpu->CPU6502.Reset();
+            
 
-            ImGui::Checkbox (("SHOW INSTRUCTION LIST"), &show_instruction_window);
-            ImGui::Checkbox (("SHOW Z PAGE"), &show_zpage);
+            ImGui::Checkbox(("SHOW INSTRUCTION LIST"), &show_instruction_window);
+            ImGui::Checkbox(("SHOW Z PAGE"), &show_zpage);
 
-            ImGui::Text ("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO ().Framerate, ImGui::GetIO ().Framerate);
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO ().Framerate, ImGui::GetIO ().Framerate);
 
-            ImGui::End ();
+            ImGui::End();
         }
 
         if (show_instruction_window)
         {
-            ImGui::Begin ("Inctructions", &show_instruction_window);
+            ImGui::Begin ("Instructions", &show_instruction_window);
 
-            auto queque_ = instructions_dump (nes_cpu->CPU6502);
+            uint16_t current = 0;
+            auto queque_ = instructions_dump(&nes_cpu->CPU6502, current);
             for (int i = 0; i < queque_.size (); i++) {
-                //std::cout << queque_[i] << std::endl;
-                ImGui::Text ("%s", queque_[i].c_str());
+                if (current == i) 
+                    ImGui::TextColored({1, 0, 1, 1}, "%s", queque_[i].c_str());
+                else 
+                    ImGui::Text ("%s", queque_[i].c_str());
             }
             ImGui::End ();
         }
 
         if (show_zpage)
         {
-            ImGui::Begin ("Z Page", &show_zpage);
-
-
+            ImGui::Begin ("Z Page & Stack", &show_zpage);
             for (uint16_t row = 0x00; row < 256; row += 8) {
                 std::string line (4, ' ');
-                sprintf_s (const_cast<char*>(line.data ()), line.size (), "$%02X", row);
+                sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
+                line[3] = ' ';
                 for (uint16_t column = row; column < row + 8; column++) {
                     std::string val (3, ' ');
-                    sprintf_s (const_cast<char*>(line.data ()), val.size (), "%02X", nes_cpu->CPU6502->memory[column]);
-                    line += val;
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->CPU6502.memory[column]);
+                    line += val.substr(0, 2) + " ";
                 }
-                ImGui::Text ("%s", line.c_str ());
+                ImGui::Text(line.c_str());
             }
-            ImGui::Text ("Stack %s", "");
+            ImGui::Text("Stack");
 
-            for (uint16_t row = nes_cpu->CPU6502->stackBottom + 0xFF; row > nes_cpu->CPU6502->stackBottom + 0xFF * 0.75; row -= 2) {
-                std::string line (6, ' ');
+            for (uint16_t row = nes_cpu->CPU6502.stackBottom + 0xFF; row > nes_cpu->CPU6502.stackBottom + 0xFF * 0.75; row -= 2) {
+                std::string line(6, ' ');
                 sprintf_s (const_cast<char*>(line.data ()), line.size (), "$%04X", row);
-                for (uint16_t column = row; column < row + 2; column++) {
+                line[5] = ' ';
+                for (uint16_t column = row; column > row - 2; column--) {
                     std::string val (4, ' ');
-                    sprintf_s (const_cast<char*>(line.data ()), val.size (), "%02X", nes_cpu->CPU6502->memory[column]);
-                    line += val;
+                    sprintf_s (const_cast<char*>(val.data ()), val.size (), "%02X", nes_cpu->CPU6502.memory[column]);
+                    line += val.substr(0, 2) + " ";
                 }
-                //DrawString (235, 15 + (cpu->stackBottom + 0xFF - row) * 4, line, olc::RED, 1);
-
-                ImGui::Text ("%s", line.c_str());
+                ImGui::Text (line.c_str());
             }
 
 
-            ImGui::End ();
+            ImGui::End();
 
         }
         ImGui::Render ();
@@ -261,9 +268,8 @@ int BasicInitGui (NES *nes_cpu) {
         glViewport (0, 0, display_w, display_h);
         glClearColor (clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear (GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData (ImGui::GetDrawData ());
-
-        glfwSwapBuffers (window);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
     }
 
     ImGui_ImplOpenGL3_Shutdown ();
