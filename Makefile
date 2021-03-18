@@ -15,7 +15,9 @@
 #CXX = clang++
 
 EXE = example_glfw_opengl3
-IMGUI_DIR = ../..
+IMGUI_DIR = imgui
+LIBS_DIR = libs
+
 SOURCES = main.cpp
 SOURCES += $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
 SOURCES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
@@ -31,9 +33,10 @@ LIBS =
 ##---------------------------------------------------------------------
 
 ## Using OpenGL loader: gl3w [default]
-SOURCES += ../libs/gl3w/GL/gl3w.c
-CXXFLAGS += -I../libs/gl3w -DIMGUI_IMPL_OPENGL_LOADER_GL3W
+SOURCES += $(IMGUI_DIR)/gl3w/GL/gl3w.c
+CXXFLAGS += -I $(IMGUI_DIR)/gl3w -DIMGUI_IMPL_OPENGL_LOADER_GL3W
 
+# FIXME
 ## Using OpenGL loader: glew
 ## (This assumes a system-wide installation)
 # CXXFLAGS += -DIMGUI_IMPL_OPENGL_LOADER_GLEW
@@ -100,10 +103,10 @@ endif
 %.o:$(IMGUI_DIR)/backends/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-%.o:../libs/gl3w/GL/%.c
+%.o:$(IMGUI_DIR)/gl3w/GL/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-%.o:../libs/glad/src/%.c
+%.o:$(IMGUI_DIR)/glad/src/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 all: $(EXE)

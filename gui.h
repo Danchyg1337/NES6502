@@ -26,7 +26,6 @@ using namespace gl;
 #include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
 #endif
 
-
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include "Defines.h"
