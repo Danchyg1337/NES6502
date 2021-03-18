@@ -3,6 +3,7 @@ name: MSBuild
 on: [push]
 
 env:
+  submodules: true
   # Path to the solution file relative to the root of the project.
   SOLUTION_FILE_PATH: .
 
@@ -14,7 +15,6 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v2
 
