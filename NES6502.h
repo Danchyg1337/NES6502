@@ -1,10 +1,11 @@
-﻿
+﻿#pragma once
 #include <fstream>
 
 #include <deque>
 #include <vector>
 #include <mutex>
 
+#include "PPU.h"
 #include "CPU.h"
 
 
@@ -25,8 +26,8 @@ public:
             std::cout << "No input file " << filename << std::endl;
             return false;
         }
-        std::vector<uint8_t> program (std::istreambuf_iterator<char> (file), {});
-        CPU6502.Load (program.data (), program.size (), true);
+        std::vector<uint8_t> program(std::istreambuf_iterator<char>(file), {});
+        CPU6502.Load(program.data(), program.size());
         return true;
     }
 

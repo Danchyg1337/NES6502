@@ -1,14 +1,19 @@
 #pragma once
-
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>
-
+#include <vector>
 
 class CPU {
+    uint8_t* memory = nullptr;
 public:
-    int ramsize = 2048 * 32;
+    uint8_t PRGsize = 1, CHRsize = 0, flag6, flag7;
+    std::vector<uint8_t> PRGROM;
+    std::vector<uint8_t> CHRROM;
     bool Load(uint8_t* program, size_t size, bool isRawCode = false) {
+        memory = new uint8_t[0x10000];
+        for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
+        Reset();
         if (!isRawCode) {
             uint8_t header[16];
             memcpy(header, program, 16);
@@ -16,24 +21,30 @@ public:
                 printf("Unknown format.");
                 return false;
             }
-            //tbc
+            PRGsize = header[4];
+            CHRsize = header[5];
+            flag6 = header[6];
+            flag7 = header[7];
+            printf("PRG size %i, CHR size %i\nFlag6 %c %c %c %c %c %c %c %c\nFlag7 %c %c %c %c %c %c %c %c\n", PRGsize, CHRsize, BYTE_TO_BINARY(flag6), BYTE_TO_BINARY(flag7));
+            PRGROM.resize(16384 * PRGsize);
+            CHRROM.resize((8192 * CHRsize));
+            memcpy(PRGROM.data(), program + 16, PRGROM.size());
+            memcpy(CHRROM.data(), program + 16 + PRGROM.size(), CHRROM.size());
         }
-
-        memory = new uint8_t[ramsize];
-        for (int t = 0; t < ramsize; t++) memory[t] = 0;
-        Reset();
-        memcpy(&memory[PC], program, size);
+        else {
+            PRGROM.resize(16384 * PRGsize);
+            memcpy(PRGROM.data(), program, PRGROM.size());
+        }
         return true;
     }
 
     bool running = false;
 
-    uint8_t* memory = nullptr;
 
     uint16_t value = 0;
     bool isValueRegister = false;
 
-    uint16_t startAddr = 0x0600;
+    uint16_t startAddr = 0x8000;
     uint16_t stackBottom = 0x0100;
 
     uint8_t  A = 0;          //Accumulator
@@ -66,9 +77,44 @@ public:
 
 
     uint8_t Fetch() {
-        uint8_t fetched = memory[PC];
+        uint8_t fetched = Read(PC);
         PC++;
         return fetched;
+    }
+
+    uint8_t& Read(uint16_t addr) {
+        //RAM
+        if (addr >= 0x0000 && addr < 0x0800) {
+            return memory[addr];
+        }
+        //Mirrors of RAM
+        else if (addr >= 0x0800 && addr < 0x2000) {
+            return Read(addr % 0x0800);
+        }
+        //PPU Registers
+        else if (addr >= 0x2000 && addr < 0x2008) {
+            return memory[addr];
+        }
+        //Mirrors of PPU Registers
+        else if (addr >= 0x2008 && addr < 0x4000) {
+            return Read((addr - 0x2000) % 0x0008);
+        }
+        //APU Registers
+        else if (addr >= 0x4000 && addr < 0x4020) {
+            return memory[addr];
+        }
+        //Cartridge Expansion ROM
+        else if (addr >= 0x4000 && addr < 0x6000) {
+            
+        }
+        //SRAM
+        else if (addr >= 0x6000 && addr < 0x8000) {
+            return memory[addr];
+        }
+        //PRG-ROM
+        else if (addr >= 0x8000 && addr < 0xFFFF) {
+            return PRGROM[addr - 0x8000];
+        }
     }
 
     void Write(uint16_t addr, uint8_t value) {
@@ -94,19 +140,15 @@ public:
         }
         //Cartridge Expansion ROM
         else if (addr >= 0x4000 && addr < 0x6000) {
-            memory[addr] = value;
+            //ROM is Read-Only
         }
         //SRAM
         else if (addr >= 0x6000 && addr < 0x8000) {
             memory[addr] = value;
         }
         //PRG-ROM
-        else if (addr >= 0x8000 && addr < 0xC000) {
-            memory[addr] = value;
-        }
-        //PRG-ROM
-        else if (addr >= 0xC000 && addr < 0xFFFF) {
-            memory[addr] = value;
+        else if (addr >= 0x8000 && addr < 0xFFFF) {
+            //ROM is Read-Only
         }
     }
 
@@ -213,16 +255,16 @@ public:
     void INDX(void (CPU::* command)()) {
         uint8_t Xval = Fetch();
         uint8_t pos = Xval + int8_t(X);
-        value = memory[pos];
-        value |= uint16_t(memory[pos + 1]) << 8;
+        value = Read(pos);
+        value |= uint16_t(Read(pos + 1)) << 8;
         isValueRegister = true;
         (this->*command)();
     }
 
     void INDY(void (CPU::* command)()) {
         uint8_t Yval = Fetch();
-        value = memory[Yval];
-        value |= uint16_t(memory[Yval + 1]) << 8;
+        value = Read(Yval);
+        value |= uint16_t(Read(Yval + 1)) << 8;
         value += int8_t(Y);
         isValueRegister = true;
         (this->*command)();
@@ -230,21 +272,21 @@ public:
 
     //instructions
     void LDA() {
-        if (isValueRegister) A = memory[value];
+        if (isValueRegister) A = Read(value);
         else A = value;
         SetFlag(FLAGS::Z, A == 0);
         SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
     void LDX() {
-        if (isValueRegister) X = memory[value];
+        if (isValueRegister) X = Read(value);
         else X = value;
         SetFlag(FLAGS::Z, X == 0);
         SetFlag(FLAGS::N, FLAGS::N & X);
     }
 
     void LDY() {
-        if (isValueRegister) Y = memory[value];
+        if (isValueRegister) Y = Read(value);
         else Y = value;
         SetFlag(FLAGS::Z, Y == 0);
         SetFlag(FLAGS::N, FLAGS::N & Y);
@@ -269,7 +311,7 @@ public:
     }
 
     void BRK() {                                        //not completed
-        memory[SP] = PC;
+        Write(SP, PC);
         SetFlag(FLAGS::B, true);
     }
 
@@ -292,26 +334,26 @@ public:
     }
 
     void AND() {
-        if (isValueRegister) A &= memory[value];
+        if (isValueRegister) A &= Read(value);
         else A &= value;
         SetFlag(FLAGS::Z, A == 0);
         SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
     void STA() {
-        memory[value] = A;
+        Write(value, A);
     }
     void STX() {
-        memory[value] = X;
+        Write(value, X);
     }
     void STY() {
-        memory[value] = Y;
+        Write(value, Y);
     }
 
     void JSR() {
-        memory[stackBottom + SP] = (PC - 1) >> 8;
+        Write(stackBottom + SP, (PC - 1) >> 8);
         SP--;
-        memory[stackBottom + SP] = PC - 1;
+        Write(stackBottom + SP, PC - 1);
         SP--;
         PC = value;
     }
@@ -319,11 +361,11 @@ public:
     void RTS() {
         uint16_t toPC;
         SP++;
-        toPC = memory[stackBottom + SP];
-        memory[stackBottom + SP] = 0x00;
+        toPC = Read(stackBottom + SP);
+        Write(stackBottom + SP, 0);
         SP++;
-        toPC |= uint16_t(memory[stackBottom + SP]) << 8;
-        memory[stackBottom + SP] = 0x00;
+        toPC |= uint16_t(Read(stackBottom + SP)) << 8;
+        Write(stackBottom + SP, 0);
         PC = toPC + 1;
     }
 
@@ -334,8 +376,8 @@ public:
     void CMP() {
         uint8_t res, val = value;
         if (isValueRegister) {
-            res = A - memory[value];
-            val = memory[value];
+            res = A - Read(value);
+            val = Read(value);
         }
         else
             res = A - value;
@@ -347,8 +389,8 @@ public:
     void CPX() {
         uint8_t res, val = value;
         if (isValueRegister) {
-            res = X - memory[value];
-            val = memory[value];
+            res = X - Read(value);
+            val = Read(value);
         }
         else
             res = X - value;
@@ -360,8 +402,8 @@ public:
     void CPY() {
         uint8_t res, val = value;
         if (isValueRegister) {
-            res = Y - memory[value];
-            val = memory[value];
+            res = Y - Read(value);
+            val = Read(value);
         }
         else
             res = Y - value;
@@ -392,7 +434,7 @@ public:
 
     void ORA() {
         if (isValueRegister)
-            A |= memory[value];
+            A |= Read(value);
         else
             A |= value;
         SetFlag(FLAGS::Z, A == 0);
@@ -410,9 +452,9 @@ public:
     }
 
     void INC() {
-        memory[value]++;
-        SetFlag(FLAGS::Z, memory[value] == 0);
-        SetFlag(FLAGS::N, memory[value] & FLAGS::N);
+        Read(value)++;
+        SetFlag(FLAGS::Z, Read(value) == 0);
+        SetFlag(FLAGS::N, Read(value) & FLAGS::N);
     }
 
     void DEX() {
@@ -422,9 +464,9 @@ public:
     }
 
     void DEC() {
-        memory[value]--;
-        SetFlag(FLAGS::Z, memory[value] == 0);
-        SetFlag(FLAGS::N, memory[value] & FLAGS::N);
+        Read(value)--;
+        SetFlag(FLAGS::Z, Read(value) == 0);
+        SetFlag(FLAGS::N, Read(value) & FLAGS::N);
     }
 
     void TXA() {
@@ -432,31 +474,43 @@ public:
         SetFlag(FLAGS::Z, A == 0);
         SetFlag(FLAGS::N, A & FLAGS::N);
     }
-
+    
     void PHA() {
-        memory[stackBottom + SP] = A;
+        Write(stackBottom + SP, A);
         SP--;
     }
 
     void PLA() {
         SP++;
-        A = memory[stackBottom + SP];
+        A = Read(stackBottom + SP);
+    }
+
+    void TXS() {
+        Write(stackBottom + SP, X);
+        SP--;
     }
 
     void LSR() {
-        uint8_t* memptr;
-        if (isValueRegister)
-            memptr = &memory[value];
-        else
-            memptr = &A;
-        SetFlag(FLAGS::C, *memptr & FLAGS::C);
-        *memptr >>= 1;
-        SetFlag(FLAGS::Z, *memptr == 0);
-        SetFlag(FLAGS::N, *memptr & FLAGS::N);
+        uint8_t* ptr = &A;
+        if (isValueRegister) {
+            ptr = &Read(value);                 //May cause a crash
+        }
+        SetFlag(FLAGS::C, *ptr & FLAGS::C);
+        *ptr >>= 1;
+        SetFlag(FLAGS::Z, *ptr == 0);
+        SetFlag(FLAGS::N, *ptr & FLAGS::N);
     }
 
     void SEC() {
         SetFlag(FLAGS::C, true);
+    }
+
+    void SEI() {
+        SetFlag(FLAGS::I, false);
+    }
+
+    void CLD() {
+        SetFlag(FLAGS::D, false);
     }
 
     void NOP() {
@@ -475,6 +529,9 @@ public:
         {0xA9, {&CPU::LDA, &CPU::IMM,  "LDA", 2, 2}},
         {0xA5, {&CPU::LDA, &CPU::ZPG,  "LDA", 2, 3}},
         {0xB5, {&CPU::LDA, &CPU::ZPGX, "LDA", 2, 4}},
+        {0xAD, {&CPU::LDA, &CPU::ABS,  "LDA", 3, 4}},
+        {0xBD, {&CPU::LDA, &CPU::ABSX, "LDA", 3, 4}},           // cycles (+1 if page crossed)
+        {0xB9, {&CPU::LDA, &CPU::ABSY, "LDA", 3, 4}},           // cycles (+1 if page crossed)
         {0xA2, {&CPU::LDX, &CPU::IMM,  "LDX", 2, 2}},
         {0xA6, {&CPU::LDX, &CPU::ZPG,  "LDX", 2, 3}},
         {0xB6, {&CPU::LDX, &CPU::ZPGY, "LDX", 2, 4}},
@@ -538,7 +595,10 @@ public:
         {0x4E, {&CPU::LSR, &CPU::ABS,  "LSR", 3, 6}},
         {0x5E, {&CPU::LSR, &CPU::ABSX, "LSR", 3, 7}},
         {0x38, {&CPU::SEC, &CPU::IMP,  "SEC", 1, 2}},
-        {0xE9, {&CPU::SBC, &CPU::IMM,  "SBC", 2, 2}}
+        {0xE9, {&CPU::SBC, &CPU::IMM,  "SBC", 2, 2}},
+        {0x78, {&CPU::SEI, &CPU::IMP,  "SEI", 1, 2}},
+        {0xD8, {&CPU::CLD, &CPU::IMP,  "CLD", 1, 2}},
+        {0x9A, {&CPU::TXS, &CPU::IMP,  "TXS", 1, 2}}
     };
 
 };

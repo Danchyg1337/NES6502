@@ -4,7 +4,7 @@
 
 int main(int, char**)
 {
-    std::string file_name = "JSRTest.6502";
+    std::string file_name = "Super Mario Bros.nes";
     NES nes;
     nes.OnUserCreate(file_name);
 

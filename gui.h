@@ -41,18 +41,64 @@ static void glfw_error_callback (int error, const char* description)
     fprintf (stderr, "Glfw Error %d: %s\n", error, description);
 }
 
+GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
+    if (!CPU6502 || CPU6502->CHRsize == 0) return -1;
+    
+    uint16_t width = 8 * 512;
+    uint16_t height = width;
 
+    GLuint framebuffer = 0;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
+    
+    GLenum drawbuffer[1] = { GL_COLOR_ATTACHMENT0 };
+    glDrawBuffers(1, drawbuffer);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return -1;
+    
+    uint8_t* data = new uint8_t[8 * 8 * 512];
+    uint16_t offset = 0x2000 * bank;
+
+    for (uint16_t index = 0; index < 0x2000; index+=16) {
+        
+        for (uint16_t pixel = index; pixel < index + 8; pixel++) {
+            uint8_t LSB = CPU6502->CHRROM[offset + pixel];
+            uint8_t MSB = CPU6502->CHRROM[offset + pixel + 8];
+            
+            for (uint8_t bit = 128, num = 0; bit > 0; bit *= .5, num++) {
+                bool L = LSB & bit;
+                bool M = MSB & bit;
+                data[pixel + num] = uint8_t(M) << 1 | uint8_t(L);
+            }
+        }
+    }
+
+    //bind shaders/uv/and drawcall, then return texture number;
+
+}
 
 std::deque<std::string> instructions_dump(CPU *CPU6502, uint16_t &currentLine) {
     std::deque<std::string> queque_;
 
     uint16_t local_pc = CPU6502->startAddr;
-    uint8_t opcode = CPU6502->memory[local_pc];
+    uint8_t opcode = CPU6502->Read(local_pc);
 
     int current = 0, aboveLocalPC = 0;
     while ((aboveLocalPC < 5 || queque_.size () < 10) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
 
-        opcode = CPU6502->memory[local_pc];
+        opcode = CPU6502->Read(local_pc);
         if (CPU6502->instructions.find (opcode) == CPU6502->instructions.end ()) {
             std::string line (15, ' ');
             sprintf_s (const_cast<char*>(line.data ()), line.size (), "%04X %s -> %02X", local_pc, "???", opcode);
@@ -72,7 +118,7 @@ std::deque<std::string> instructions_dump(CPU *CPU6502, uint16_t &currentLine) {
 
         for (uint8_t i = 1; i < instruction.bytes; i++) {
             std::string buff (3, ' ');
-            sprintf_s (const_cast<char*>(buff.data ()), buff.size (), "%02X", CPU6502->memory[local_pc + i]);
+            sprintf_s (const_cast<char*>(buff.data ()), buff.size (), "%02X", CPU6502->Read(local_pc + i));
             line += buff.substr(0, 2) + ' ';
         }
 
@@ -195,7 +241,7 @@ int BasicInitGui (NES *nes_cpu) {
             //ImGui::SliderFloat ("float", &f, 0.0f, 1.0f);           
             //ImGui::ColorEdit3 ("clear color", (float*)&clear_color); 
 
-            if (ImGui::Button("RUN")) {
+            if (ImGui::Button(nes_cpu->CPU6502.running ? "STOP" : "RUN")) {
                 nes_cpu->CPU6502.running = !nes_cpu->CPU6502.running;
                 //nes_cpu->CPU6502->Run();
             }
@@ -239,7 +285,7 @@ int BasicInitGui (NES *nes_cpu) {
                 line[3] = ' ';
                 for (uint16_t column = row; column < row + 8; column++) {
                     std::string val (3, ' ');
-                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->CPU6502.memory[column]);
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->CPU6502.Read(column));
                     line += val.substr(0, 2) + " ";
                 }
                 ImGui::Text(line.c_str());
@@ -252,22 +298,23 @@ int BasicInitGui (NES *nes_cpu) {
                 line[5] = ' ';
                 for (uint16_t column = row; column > row - 2; column--) {
                     std::string val (4, ' ');
-                    sprintf_s (const_cast<char*>(val.data ()), val.size (), "%02X", nes_cpu->CPU6502.memory[column]);
+                    sprintf_s (const_cast<char*>(val.data ()), val.size (), "%02X", nes_cpu->CPU6502.Read(column));
                     line += val.substr(0, 2) + " ";
                 }
                 ImGui::Text (line.c_str());
             }
 
-
             ImGui::End();
-
         }
+        
+
         ImGui::Render ();
         int display_w, display_h;
         glfwGetFramebufferSize (window, &display_w, &display_h);
         glViewport (0, 0, display_w, display_h);
         glClearColor (clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear (GL_COLOR_BUFFER_BIT);
+        
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
     }

@@ -80,5 +80,8 @@
     <ClInclude Include="imgui\imgui_internal.h">
       <Filter>Исходные файлы\Source Code</Filter>
     </ClInclude>
+    <ClInclude Include="PPU.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
