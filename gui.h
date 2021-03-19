@@ -66,8 +66,8 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint8_t bank = 0) {
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
@@ -87,19 +87,7 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint8_t bank = 0) {
 
     memcpy(data, &CPU6502->CHRROM[offset], 1024);
 
-    /*for (uint16_t index = 0; index < 0x2000; index+=16) {
-        
-        for (uint16_t pixel = index; pixel < index + 8; pixel++) {
-            uint8_t LSB = CPU6502->CHRROM[offset + pixel];
-            uint8_t MSB = CPU6502->CHRROM[offset + pixel + 8];
-            
-            for (uint8_t bit = 128, num = 0; bit > 0; bit *= .5, num++) {
-                bool L = LSB & bit;
-                bool M = MSB & bit;
-                data[pixel + num] = uint8_t(M) << 1 | uint8_t(L);
-            }
-        }
-    }*/
+
 
     fillTexture.Use();
     glUniform1i(fillTexture.SetUniform("textureWidth"), width);
