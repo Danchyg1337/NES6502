@@ -41,16 +41,16 @@ static void glfw_error_callback (int error, const char* description)
     fprintf (stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
+GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint8_t bank = 0) {
     if (!CPU6502 || CPU6502->CHRsize == 0) return -1;
-    
-    uint16_t width = 8 * 512;
-    uint16_t height = width;
 
-    GLuint framebuffer = 0;
+    uint16_t width = 8 * 22;
+    uint16_t height = 8 * 24;
+
+    GLuint framebuffer;
     glGenFramebuffers(1, &framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
+    
     GLuint squareVAO, squareVBO;
     glGenVertexArrays(1, &squareVAO);
     glGenBuffers(1, &squareVBO);
@@ -72,17 +72,20 @@ GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
     
     GLenum drawbuffer[1] = { GL_COLOR_ATTACHMENT0 };
     glDrawBuffers(1, drawbuffer);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return -1;
-    
+
     uint32_t* data = new uint32_t[256];
     uint16_t offset = 0x2000 * bank;
+    float palette[9] = {1, 0, 0,
+                        0, 1, 0,
+                        0, 0, 1};
 
-    memcpy(data, &CPU6502->CHRROM[offset], 8 * 8 * 512);
+    memcpy(data, &CPU6502->CHRROM[offset], 1024);
 
     /*for (uint16_t index = 0; index < 0x2000; index+=16) {
         
@@ -98,15 +101,17 @@ GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
         }
     }*/
 
-    Shader fillTexture("Shaders/chrdump.glsl");
     fillTexture.Use();
     glUniform1i(fillTexture.SetUniform("textureWidth"), width);
     glUniform1i(fillTexture.SetUniform("textureHeight"), height);
     glUniform1i(fillTexture.SetUniform("dataSize"), 256);
+    glUniformMatrix3fv(fillTexture.SetUniform("palette"), 1, GL_FALSE, palette);
     glUniform1uiv(fillTexture.SetUniform("data"), 256, data);
     glViewport(0, 0, width, height);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     return texture;
 }
 
@@ -232,9 +237,11 @@ int BasicInitGui (NES *nes_cpu) {
 
     ImVec4 clear_color = ImVec4 (0.45f, 0.55f, 0.60f, 1.00f);
 
-    while (!glfwWindowShouldClose (window))
-    {
+    Shader fillTexture("Shaders/chrdump.glsl");
+    GLuint tex = CHRdump(&nes_cpu->CPU6502, fillTexture);
 
+    while (!glfwWindowShouldClose (window))
+    {   
         glfwPollEvents ();
         ImGui_ImplOpenGL3_NewFrame ();
         ImGui_ImplGlfw_NewFrame ();
@@ -328,6 +335,7 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::End();
         }
         
+        if(tex != -1) ImGui::Image((void*)(intptr_t)tex, { 22 * 8, 24 * 8 });
 
         ImGui::Render ();
         int display_w, display_h;
@@ -336,7 +344,7 @@ int BasicInitGui (NES *nes_cpu) {
         glClearColor (clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear (GL_COLOR_BUFFER_BIT);
         
-        ImGui::Image((ImTextureID)CHRdump(&nes_cpu->CPU6502), {8 * 512, 8 * 512});
+
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
