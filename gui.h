@@ -30,7 +30,7 @@ using namespace gl;
 #include <stdio.h>
 #include "Defines.h"
 #include "NES6502.h"
-
+#include "Shader.h"
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
 #pragma comment(lib, "legacy_stdio_definitions")
@@ -51,6 +51,17 @@ GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
     glGenFramebuffers(1, &framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
+    GLuint squareVAO, squareVBO;
+    glGenVertexArrays(1, &squareVAO);
+    glGenBuffers(1, &squareVBO);
+    glBindVertexArray(squareVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, squareVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(primitive::square), &primitive::square, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -68,10 +79,12 @@ GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return -1;
     
-    uint8_t* data = new uint8_t[8 * 8 * 512];
+    uint32_t* data = new uint32_t[256];
     uint16_t offset = 0x2000 * bank;
 
-    for (uint16_t index = 0; index < 0x2000; index+=16) {
+    memcpy(data, &CPU6502->CHRROM[offset], 8 * 8 * 512);
+
+    /*for (uint16_t index = 0; index < 0x2000; index+=16) {
         
         for (uint16_t pixel = index; pixel < index + 8; pixel++) {
             uint8_t LSB = CPU6502->CHRROM[offset + pixel];
@@ -83,10 +96,18 @@ GLuint CHRdump(CPU* CPU6502, uint8_t bank = 0) {
                 data[pixel + num] = uint8_t(M) << 1 | uint8_t(L);
             }
         }
-    }
+    }*/
 
-    //bind shaders/uv/and drawcall, then return texture number;
-
+    Shader fillTexture("Shaders/chrdump.glsl");
+    fillTexture.Use();
+    glUniform1i(fillTexture.SetUniform("textureWidth"), width);
+    glUniform1i(fillTexture.SetUniform("textureHeight"), height);
+    glUniform1i(fillTexture.SetUniform("dataSize"), 256);
+    glUniform1uiv(fillTexture.SetUniform("data"), 256, data);
+    glViewport(0, 0, width, height);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    
+    return texture;
 }
 
 std::deque<std::string> instructions_dump(CPU *CPU6502, uint16_t &currentLine) {
@@ -315,6 +336,8 @@ int BasicInitGui (NES *nes_cpu) {
         glClearColor (clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear (GL_COLOR_BUFFER_BIT);
         
+        ImGui::Image((ImTextureID)CHRdump(&nes_cpu->CPU6502), {8 * 512, 8 * 512});
+
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
     }
