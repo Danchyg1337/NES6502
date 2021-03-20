@@ -41,11 +41,14 @@ static void glfw_error_callback (int error, const char* description)
     fprintf (stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint8_t bank = 0) {
+GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, uint8_t bank = 0) {
     if (!CPU6502 || CPU6502->CHRsize == 0) return -1;
 
-    uint16_t width = 8 * 22;
-    uint16_t height = 8 * 24;
+
+    uint16_t tileWidth = 20;
+    uint16_t tileHeight = 22;
+    uint16_t width = 8 * tileWidth;
+    uint16_t height = 8 * tileHeight;
 
     GLuint framebuffer;
     glGenFramebuffers(1, &framebuffer);
@@ -66,8 +69,8 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint8_t bank = 0) {
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
@@ -79,27 +82,35 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint8_t bank = 0) {
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return -1;
 
-    uint32_t* data = new uint32_t[256];
+    //uint32_t data[4] = {
+    //    0b11100000110000001000000011111100,
+    //    0b10000000110000000000000000100000,
+    //    0b00000000001000000110000000000000,
+    //    0b11110000111111001111111011111110
+    //};
+
+    uint32_t* data = new uint32_t[16 * 512];
+
     uint16_t offset = 0x2000 * bank;
     float palette[9] = {1, 0, 0,
                         0, 1, 0,
                         0, 0, 1};
 
-    memcpy(data, &CPU6502->CHRROM[offset], 1024);
-
+    memcpy(data, &CPU6502->CHRROM[offset], 32 * 512);
 
 
     fillTexture.Use();
-    glUniform1i(fillTexture.SetUniform("textureWidth"), width);
-    glUniform1i(fillTexture.SetUniform("textureHeight"), height);
-    glUniform1i(fillTexture.SetUniform("dataSize"), 256);
+    glUniform1f(fillTexture.SetUniform("width"), tileWidth);
+    glUniform1f(fillTexture.SetUniform("height"), tileHeight);
     glUniformMatrix3fv(fillTexture.SetUniform("palette"), 1, GL_FALSE, palette);
-    glUniform1uiv(fillTexture.SetUniform("data"), 256, data);
+    glUniform1uiv(fillTexture.SetUniform("data"), 16 * 512, data);
     glViewport(0, 0, width, height);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     
     glBindVertexArray(0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    tileH = tileHeight;
+    tileW = tileWidth;
     return texture;
 }
 
@@ -226,7 +237,8 @@ int BasicInitGui (NES *nes_cpu) {
     ImVec4 clear_color = ImVec4 (0.45f, 0.55f, 0.60f, 1.00f);
 
     Shader fillTexture("Shaders/chrdump.glsl");
-    GLuint tex = CHRdump(&nes_cpu->CPU6502, fillTexture);
+    uint16_t tileWidth, tileHeight;
+    GLuint tex = CHRdump(&nes_cpu->CPU6502, fillTexture, tileWidth, tileHeight);
 
     while (!glfwWindowShouldClose (window))
     {   
@@ -323,7 +335,7 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::End();
         }
         
-        if(tex != -1) ImGui::Image((void*)(intptr_t)tex, { 22 * 8, 24 * 8 });
+        if(tex != -1) ImGui::Image((void*)(intptr_t)tex, { float(tileWidth * 32), float(tileHeight * 32) });
 
         ImGui::Render ();
         int display_w, display_h;
