@@ -14,7 +14,7 @@
 #CXX = g++
 #CXX = clang++
 
-EXE = example_glfw_opengl3
+EXE = NES6502
 IMGUI_DIR = imgui
 LIBS_DIR = libs
 
@@ -26,7 +26,7 @@ UNAME_S := $(shell uname -s)
 
 CXXFLAGS = -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
 CXXFLAGS += -g -Wall -Wformat
-LIBS =
+LIBS = 
 
 ##---------------------------------------------------------------------
 ## OPENGL LOADER
@@ -103,10 +103,10 @@ endif
 %.o:$(IMGUI_DIR)/backends/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-%.o:$(IMGUI_DIR)/gl3w/GL/%.c
+%.o:$(LIBS_DIR)/gl3w/GL/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-%.o:$(IMGUI_DIR)/glad/src/%.c
+%.o:$(LIBS_DIR)/glad/src/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 all: $(EXE)
