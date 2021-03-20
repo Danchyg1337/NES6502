@@ -13,12 +13,15 @@ void main(){
 #version 330 core
 
 layout(location = 0) out vec4 Frag_color;
-#define dataSize 512
-uniform uint data[dataSize];
 uniform mat3 palette;
 in vec2 texPos;
 uniform float width;
 uniform float height;
+
+uniform CHRrom
+{
+  uint val[1024];
+} data;
 
 void main () {
 	float PosX = width * texPos.x; // 0.567 * 22
@@ -45,11 +48,11 @@ void main () {
 	uint finalPos = ((relPosY * 4U * uint(width)) + relPosX * 4U) + fractINT_Y;		//final position in the data array;
 	uint lowByte = finalPos, highByte = finalPos + 2U;
 
-	uint data_low = data[lowByte];
+	uint data_low = data.val[lowByte];
 	data_low = (data_low >> a[int32indexY]);
 	data_low = (data_low & (1U << (7U - int32indexX))) >> (7U - int32indexX);
 
-	uint data_hig = data[highByte];
+	uint data_hig = data.val[highByte];
 	data_hig = (data_hig >> a[int32indexY]);
 	data_hig = (data_hig & (1U << (7U - int32indexX))) >> (7U - int32indexX);
 

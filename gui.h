@@ -46,7 +46,7 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint16_t &tileW, uint16_t &til
 
 
     uint16_t tileWidth = 20;
-    uint16_t tileHeight = 22;
+    uint16_t tileHeight = 24;
     uint16_t width = 8 * tileWidth;
     uint16_t height = 8 * tileHeight;
 
@@ -82,31 +82,32 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint16_t &tileW, uint16_t &til
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return -1;
 
-    //uint32_t data[4] = {
-    //    0b11100000110000001000000011111100,
-    //    0b10000000110000000000000000100000,
-    //    0b00000000001000000110000000000000,
-    //    0b11110000111111001111111011111110
-    //};
-
-    uint32_t* data = new uint32_t[16 * 512];
-
-    uint16_t offset = 0x2000 * bank;
+    uint16_t offset = 0x2000 *bank;
     float palette[9] = {1, 0, 0,
                         0, 1, 0,
                         0, 0, 1};
 
-    memcpy(data, &CPU6502->CHRROM[offset], 32 * 512);
+    GLuint chrBlock;
+    glGenBuffers(1, &chrBlock);
+    glBindBuffer(GL_UNIFORM_BUFFER, chrBlock);
+    glBufferData(GL_UNIFORM_BUFFER, CPU6502->CHRROM.size(), CPU6502->CHRROM.data() + offset, GL_STATIC_DRAW);
 
+    GLuint dataIndex = glGetUniformBlockIndex(fillTexture.Program, "CHRrom");
+    glUniformBlockBinding(fillTexture.Program, dataIndex, 0);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, chrBlock);
 
     fillTexture.Use();
     glUniform1f(fillTexture.SetUniform("width"), tileWidth);
     glUniform1f(fillTexture.SetUniform("height"), tileHeight);
     glUniformMatrix3fv(fillTexture.SetUniform("palette"), 1, GL_FALSE, palette);
-    glUniform1uiv(fillTexture.SetUniform("data"), 16 * 512, data);
     glViewport(0, 0, width, height);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    int maxUniformVectors;
+    glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &maxUniformVectors);
+    std::cout << maxUniformVectors << std::endl;
     
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
     glBindVertexArray(0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     tileH = tileHeight;
