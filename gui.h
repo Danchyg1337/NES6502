@@ -102,10 +102,6 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint16_t &tileW, uint16_t &til
     glUniformMatrix3fv(fillTexture.SetUniform("palette"), 1, GL_FALSE, palette);
     glViewport(0, 0, width, height);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    int maxUniformVectors;
-    glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &maxUniformVectors);
-    std::cout << maxUniformVectors << std::endl;
     
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
     glBindVertexArray(0);
