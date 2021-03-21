@@ -2,9 +2,19 @@
 
 
 class PPU {
-	uint8_t* memory = nullptr;
+public:
+	uint16_t clockCycle = 0;
+
+	std::vector<uint8_t> CHRROM;
+	std::vector<uint8_t> VRAM;
 	PPU() {
-		memory = new uint8_t[0x10000];
-		std::vector<uint8_t> CHRROM;
+		
 	}
+
+    bool Load(uint8_t* pattern, size_t size) {
+		VRAM.resize(2048, 0);
+		CHRROM.resize(size);
+		memcpy(CHRROM.data(), pattern, size);
+		return true;
+    }
 };

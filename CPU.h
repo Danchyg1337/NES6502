@@ -7,40 +7,18 @@
 class CPU {
     uint8_t* memory = nullptr;
 public:
-    uint8_t PRGsize = 1, CHRsize = 0, flag6, flag7;
     std::vector<uint8_t> PRGROM;
-    std::vector<uint8_t> CHRROM;
-    bool Load(uint8_t* program, size_t size, bool isRawCode = false) {
+    bool Load(uint8_t* program, size_t size) {
         memory = new uint8_t[0x10000];
-        for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
         Reset();
-        if (!isRawCode) {
-            uint8_t header[16];
-            memcpy(header, program, 16);
-            if (header[0] != 'N' || header[1] != 'E' || header[2] != 'S' || header[3] != 0x1A) {
-                printf("Unknown format.");
-                return false;
-            }
-            PRGsize = header[4];
-            CHRsize = header[5];
-            flag6 = header[6];
-            flag7 = header[7];
-            printf("PRG size %i, CHR size %i\nFlag6 %c %c %c %c %c %c %c %c\nFlag7 %c %c %c %c %c %c %c %c\n", PRGsize, CHRsize, BYTE_TO_BINARY(flag6), BYTE_TO_BINARY(flag7));
-            PRGROM.resize(16384 * PRGsize);
-            CHRROM.resize((8192 * CHRsize));
-            memcpy(PRGROM.data(), program + 16, PRGROM.size());
-            memcpy(CHRROM.data(), program + 16 + PRGROM.size(), CHRROM.size());
-        }
-        else {
-            PRGROM.resize(16384 * PRGsize);
-            memcpy(PRGROM.data(), program, PRGROM.size());
-        }
+        PRGROM.resize(size);
+        memcpy(PRGROM.data(), program, size);
         return true;
     }
 
     bool running = false;
 
-
+    uint16_t clockCycle = 0;
     uint16_t value = 0;
     bool isValueRegister = false;
 
@@ -66,13 +44,13 @@ public:
     };
 
     void Reset() {
+        for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
         SP = 0xFF;
         PC = startAddr;
         SR = FLAGS::IGNORED;
         A = 0;
         X = 0;
         Y = 0;
-        system("cls");
     }
 
 
@@ -164,9 +142,17 @@ public:
 
     void Call() {
         //memory[0xfe] = rand() % 256;
+        if (clockCycle != 0) {
+            clockCycle--;
+            return;
+        }
         uint8_t opcode = Fetch();
-        if (instructions.find(opcode) == instructions.end()) InvalidCommand(opcode);
-        else (this->*instructions[opcode].mode)(instructions[opcode].command);
+        if (instructions.find(opcode) != instructions.end()) {
+            (this->*instructions[opcode].mode)(instructions[opcode].command);
+            clockCycle += instructions[opcode].cycles;
+        }
+        else 
+            InvalidCommand(opcode);
     }
 
     void InvalidCommand(uint8_t code) {

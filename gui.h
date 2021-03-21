@@ -41,8 +41,8 @@ static void glfw_error_callback (int error, const char* description)
     fprintf (stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, uint8_t bank = 0) {
-    if (!CPU6502 || CPU6502->CHRsize == 0) return -1;
+GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, uint8_t bank = 0) {
+    if (!ppu || ppu->CHRROM.size() == 0) return -1;
 
 
     uint16_t tileWidth = 20;
@@ -90,7 +90,7 @@ GLuint CHRdump(CPU* CPU6502, Shader& fillTexture, uint16_t &tileW, uint16_t &til
     GLuint chrBlock;
     glGenBuffers(1, &chrBlock);
     glBindBuffer(GL_UNIFORM_BUFFER, chrBlock);
-    glBufferData(GL_UNIFORM_BUFFER, CPU6502->CHRROM.size(), CPU6502->CHRROM.data() + offset, GL_STATIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, ppu->CHRROM.size(), ppu->CHRROM.data() + offset, GL_STATIC_DRAW);
 
     GLuint dataIndex = glGetUniformBlockIndex(fillTexture.Program, "CHRrom");
     glUniformBlockBinding(fillTexture.Program, dataIndex, 0);
@@ -161,10 +161,10 @@ std::deque<std::string> instructions_dump(CPU *CPU6502, uint16_t &currentLine) {
 }
 
 int BasicInitGui (NES *nes_cpu) {
-    
+    if (!nes_cpu) return 1;
     // Setup window
-    glfwSetErrorCallback (glfw_error_callback);
-    if (!glfwInit ())
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
         return 1;
 
     // Decide GL+GLSL versions
@@ -235,7 +235,7 @@ int BasicInitGui (NES *nes_cpu) {
 
     Shader fillTexture("Shaders/chrdump.glsl");
     uint16_t tileWidth, tileHeight;
-    GLuint tex = CHRdump(&nes_cpu->CPU6502, fillTexture, tileWidth, tileHeight);
+    GLuint tex = CHRdump(&nes_cpu->PPU2C02, fillTexture, tileWidth, tileHeight);
 
     while (!glfwWindowShouldClose (window))
     {   
