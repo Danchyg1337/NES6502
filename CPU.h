@@ -10,13 +10,16 @@ public:
     std::vector<uint8_t> PRGROM;
     bool Load(uint8_t* program, size_t size) {
         memory = new uint8_t[0x10000];
-        Reset();
         PRGROM.resize(size);
         memcpy(PRGROM.data(), program, size);
+        Reset();
         return true;
     }
 
-    bool running = false;
+    std::pair<uint8_t*, uint8_t*> getPPULink() {
+        if (!memory) return {0, 0};
+        return {&memory[0x2000], &memory[0x4014]};
+    }
 
     uint16_t clockCycle = 0;
     uint16_t value = 0;
@@ -46,7 +49,7 @@ public:
     void Reset() {
         for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
         SP = 0xFF;
-        PC = startAddr;
+        PC = (uint16_t(Read(0xFFFC + 1)) << 8) | uint16_t(Read(0xFFFC));
         SR = FLAGS::IGNORED;
         A = 0;
         X = 0;
@@ -90,8 +93,10 @@ public:
             return memory[addr];
         }
         //PRG-ROM
-        else if (addr >= 0x8000 && addr < 0xFFFF) {
-            return PRGROM[addr - 0x8000];
+        else if (addr >= 0x8000 && addr <= 0xFFFF) {
+            if(PRGROM.size() > 0x4000)
+                return PRGROM[addr - 0x8000];
+            return PRGROM[(addr - 0x8000) % 0x4000];
         }
     }
 
@@ -141,15 +146,14 @@ public:
     }
 
     void Call() {
-        //memory[0xfe] = rand() % 256;
-        if (clockCycle != 0) {
+        if (clockCycle > 0) {
             clockCycle--;
             return;
         }
         uint8_t opcode = Fetch();
         if (instructions.find(opcode) != instructions.end()) {
             (this->*instructions[opcode].mode)(instructions[opcode].command);
-            clockCycle += instructions[opcode].cycles;
+            clockCycle = instructions[opcode].cycles;
         }
         else 
             InvalidCommand(opcode);
@@ -219,6 +223,7 @@ public:
         uint16_t MSB = Fetch();
         value = ((MSB << 8) | LSB) + int8_t(X);
         isValueRegister = true;
+        if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
         (this->*command)();
     }
 
@@ -227,6 +232,7 @@ public:
         uint16_t MSB = Fetch();
         value = ((MSB << 8) | LSB) + int8_t(Y);
         isValueRegister = true;
+        if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
         (this->*command)();
     }
 
@@ -250,9 +256,11 @@ public:
     void INDY(void (CPU::* command)()) {
         uint8_t Yval = Fetch();
         value = Read(Yval);
-        value |= uint16_t(Read(Yval + 1)) << 8;
+        uint16_t MSB = uint16_t(Read(Yval + 1)) << 8;
+        value |= MSB;
         value += int8_t(Y);
         isValueRegister = true;
+        if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
         (this->*command)();
     }
 
@@ -282,6 +290,18 @@ public:
         X = A;
         SetFlag(FLAGS::Z, X == 0);
         SetFlag(FLAGS::N, FLAGS::N & X);
+    }
+
+    void TAY() {
+        Y = A;
+        SetFlag(FLAGS::Z, Y == 0);
+        SetFlag(FLAGS::N, FLAGS::N & Y);
+    }
+
+    void TYA() {
+        A = Y;
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
     }
 
     void INX() {
@@ -413,16 +433,31 @@ public:
         PC += int8_t(value);
     }
 
+    void BMI() {                                        //not completed
+        if (!(SR & FLAGS::N)) return;
+        PC += int8_t(value);
+    }
+
     void BCC() {                                        //not completed
         if (SR & FLAGS::C) return;
         PC += int8_t(value);
     }
+
 
     void ORA() {
         if (isValueRegister)
             A |= Read(value);
         else
             A |= value;
+        SetFlag(FLAGS::Z, A == 0);
+        SetFlag(FLAGS::N, FLAGS::N & A);
+    }
+
+    void EOR() {
+        if (isValueRegister)
+            A ^= Read(value);
+        else
+            A ^= value;
         SetFlag(FLAGS::Z, A == 0);
         SetFlag(FLAGS::N, FLAGS::N & A);
     }
@@ -447,6 +482,11 @@ public:
         X--;
         SetFlag(FLAGS::Z, X == 0);
         SetFlag(FLAGS::N, X & FLAGS::N);
+    }
+    void DEY() {
+        Y--;
+        SetFlag(FLAGS::Z, Y == 0);
+        SetFlag(FLAGS::N, Y & FLAGS::N);
     }
 
     void DEC() {
@@ -487,6 +527,17 @@ public:
         SetFlag(FLAGS::N, *ptr & FLAGS::N);
     }
 
+    void ASL() {
+        uint8_t* ptr = &A;
+        if (isValueRegister) {
+            ptr = &Read(value);                 //May cause a crash
+        }
+        SetFlag(FLAGS::C, *ptr & FLAGS::C);
+        *ptr <<= 1;
+        SetFlag(FLAGS::Z, *ptr == 0);
+        SetFlag(FLAGS::N, *ptr & FLAGS::N);
+    }
+
     void SEC() {
         SetFlag(FLAGS::C, true);
     }
@@ -516,24 +567,35 @@ public:
         {0xA5, {&CPU::LDA, &CPU::ZPG,  "LDA", 2, 3}},
         {0xB5, {&CPU::LDA, &CPU::ZPGX, "LDA", 2, 4}},
         {0xAD, {&CPU::LDA, &CPU::ABS,  "LDA", 3, 4}},
-        {0xBD, {&CPU::LDA, &CPU::ABSX, "LDA", 3, 4}},           // cycles (+1 if page crossed)
-        {0xB9, {&CPU::LDA, &CPU::ABSY, "LDA", 3, 4}},           // cycles (+1 if page crossed)
+        {0xBD, {&CPU::LDA, &CPU::ABSX, "LDA", 3, 4}},           
+        {0xB9, {&CPU::LDA, &CPU::ABSY, "LDA", 3, 4}},           
+        {0xA1, {&CPU::LDA, &CPU::INDX, "LDA", 2, 6}},           
+        {0xB1, {&CPU::LDA, &CPU::INDY, "LDA", 2, 5}},           
         {0xA2, {&CPU::LDX, &CPU::IMM,  "LDX", 2, 2}},
         {0xA6, {&CPU::LDX, &CPU::ZPG,  "LDX", 2, 3}},
         {0xB6, {&CPU::LDX, &CPU::ZPGY, "LDX", 2, 4}},
         {0xAE, {&CPU::LDX, &CPU::ABS,  "LDX", 3, 4}},
-        {0xBE, {&CPU::LDX, &CPU::ABSY, "LDX", 3, 4}},           // cycles (+1 if page crossed)
+        {0xBE, {&CPU::LDX, &CPU::ABSY, "LDX", 3, 4}},           
         {0xA0, {&CPU::LDY, &CPU::IMM,  "LDY", 2, 2}},
         {0xA4, {&CPU::LDY, &CPU::ZPG,  "LDY", 2, 3}},
         {0xB0, {&CPU::LDY, &CPU::ZPGX, "LDY", 2, 4}},
         {0xAC, {&CPU::LDY, &CPU::ABS,  "LDY", 3, 4}},
-        {0xBC, {&CPU::LDY, &CPU::ABSX, "LDY", 3, 4}},           // cycles (+1 if page crossed)
+        {0xBC, {&CPU::LDY, &CPU::ABSX, "LDY", 3, 4}},           
         {0xAA, {&CPU::TAX, &CPU::IMP,  "TAX", 1, 2}},
+        {0xA8, {&CPU::TAY, &CPU::IMP,  "TAY", 1, 2}},
+        {0x98, {&CPU::TYA, &CPU::IMP,  "TYA", 1, 2}},
         {0xE8, {&CPU::INX, &CPU::IMP,  "INX", 1, 2}},
         {0xC8, {&CPU::INY, &CPU::IMP,  "INY", 1, 2}},
         {0x00, {&CPU::BRK, &CPU::IMP,  "BRK", 1, 7}},
         {0x69, {&CPU::ADC, &CPU::IMM,  "ADC", 2, 2}},
         {0x29, {&CPU::AND, &CPU::IMM,  "AND", 2, 2}},
+        {0x25, {&CPU::AND, &CPU::ZPG,  "AND", 2, 3}},
+        {0x35, {&CPU::AND, &CPU::ZPGX, "AND", 2, 4}},
+        {0x2D, {&CPU::AND, &CPU::ABS,  "AND", 3, 4}},
+        {0x3D, {&CPU::AND, &CPU::ABSX, "AND", 3, 4}},
+        {0x39, {&CPU::AND, &CPU::ABSY, "AND", 3, 4}},
+        {0x21, {&CPU::AND, &CPU::INDX, "AND", 2, 6}},
+        {0x31, {&CPU::AND, &CPU::INDY, "AND", 2, 5}},
         {0x85, {&CPU::STA, &CPU::ZPG,  "STA", 2, 3}},
         {0x95, {&CPU::STA, &CPU::ZPGX, "STA", 2, 4}},
         {0x8D, {&CPU::STA, &CPU::ABS,  "STA", 3, 5}},
@@ -548,6 +610,12 @@ public:
         {0x18, {&CPU::CLC, &CPU::IMP,  "CLC", 1, 2}},
         {0xC9, {&CPU::CMP, &CPU::IMM,  "CMP", 2, 2}},
         {0xC5, {&CPU::CMP, &CPU::ZPG,  "CMP", 2, 3}},
+        {0xD5, {&CPU::CMP, &CPU::ZPGX, "CMP", 2, 4}},
+        {0xCD, {&CPU::CMP, &CPU::ABS,  "CMP", 3, 4}},
+        {0xDD, {&CPU::CMP, &CPU::ABSX, "CMP", 3, 4}},
+        {0xD9, {&CPU::CMP, &CPU::ABSY, "CMP", 3, 4}},
+        {0xC1, {&CPU::CMP, &CPU::INDX, "CMP", 2, 6}},
+        {0xD1, {&CPU::CMP, &CPU::INDY, "CMP", 2, 5}},
         {0xE0, {&CPU::CPX, &CPU::IMM,  "CPX", 2, 2}},
         {0xE4, {&CPU::CPX, &CPU::ZPG,  "CPX", 2, 3}},
         {0xEC, {&CPU::CPX, &CPU::ABS,  "CPX", 2, 4}},
@@ -558,7 +626,14 @@ public:
         {0xD0, {&CPU::BNE, &CPU::RLT,  "BNE", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x10, {&CPU::BPL, &CPU::RLT,  "BPL", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x90, {&CPU::BCC, &CPU::RLT,  "BCC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x30, {&CPU::BMI, &CPU::RLT,  "BMI", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x09, {&CPU::ORA, &CPU::IMM,  "ORA", 2, 2}},
         {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
+        {0x1D, {&CPU::ORA, &CPU::ABSX, "ORA", 3, 4}},
+        {0x19, {&CPU::ORA, &CPU::ABSY, "ORA", 3, 4}},
+        {0x01, {&CPU::ORA, &CPU::INDX, "ORA", 2, 6}},
+        {0x11, {&CPU::ORA, &CPU::INDY, "ORA", 2, 5}},
+        {0x41, {&CPU::EOR, &CPU::INDX, "EOR", 2, 6}},
         {0x4C, {&CPU::JMP, &CPU::ABS,  "JMP", 3, 3}},
         {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}},
         {0x24, {&CPU::BIT, &CPU::ZPG,  "BIT", 2, 3}},
@@ -567,6 +642,7 @@ public:
         {0xEE, {&CPU::INC, &CPU::ABS,  "INC", 3, 6}},
         {0xFE, {&CPU::INC, &CPU::ABSX, "INC", 3, 7}},
         {0xCA, {&CPU::DEX, &CPU::IMP,  "DEX", 1, 2}},
+        {0x88, {&CPU::DEY, &CPU::IMP,  "DEY", 1, 2}},
         {0xC6, {&CPU::DEC, &CPU::ZPG,  "DEC", 2, 5}},
         {0xD6, {&CPU::DEC, &CPU::ZPGX, "DEC", 2, 6}},
         {0xCE, {&CPU::DEC, &CPU::ABS,  "DEC", 3, 6}},
@@ -584,7 +660,8 @@ public:
         {0xE9, {&CPU::SBC, &CPU::IMM,  "SBC", 2, 2}},
         {0x78, {&CPU::SEI, &CPU::IMP,  "SEI", 1, 2}},
         {0xD8, {&CPU::CLD, &CPU::IMP,  "CLD", 1, 2}},
-        {0x9A, {&CPU::TXS, &CPU::IMP,  "TXS", 1, 2}}
+        {0x9A, {&CPU::TXS, &CPU::IMP,  "TXS", 1, 2}},
+        {0x0A, {&CPU::ASL, &CPU::ACC,  "ASL", 1, 2}}
     };
 
 };

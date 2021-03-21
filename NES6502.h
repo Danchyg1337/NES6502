@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include <fstream>
 
-#include <deque>
+#include <map>
 #include <vector>
 #include <mutex>
 
@@ -21,6 +21,9 @@ public:
     CPU CPU6502;
     PPU PPU2C02;
     std::vector<uint8_t> program;
+    bool running = false;
+
+    int delay = 100;
 public:
 
     bool LoadRom(std::string filename, bool rawcode = false)
@@ -45,15 +48,31 @@ public:
         }
         else
             CPU6502.Load(program.data(), program.size());
+        
+        auto [ctrl, oam] = CPU6502.getPPULink();
+        PPU2C02.Link(ctrl, oam);
         return true;
     }
 
-    void Step() {
+    void Reset() {
+        CPU6502.Reset();
+        PPU2C02.Reset();
+    }
 
+    void Step() {
+        do {
+            PPU2C02.Step();
+            if (!(PPU2C02.clockCycle % 3)) CPU6502.Step();
+        } while (CPU6502.clockCycle != 0 || PPU2C02.clockCycle % 3);
     }
 
     void Run() {
-
+        while (true) {
+            if (running) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+                Step();
+            }
+        }
     }
 
 };

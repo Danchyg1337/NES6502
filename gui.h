@@ -111,53 +111,36 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
     return texture;
 }
 
-std::deque<std::string> instructions_dump(CPU *CPU6502, uint16_t &currentLine) {
-    std::deque<std::string> queque_;
+std::map<uint16_t, std::string> instructions_dump(CPU *CPU6502) {
+    std::map<uint16_t, std::string> map_;
 
     uint16_t local_pc = CPU6502->startAddr;
     uint8_t opcode = CPU6502->Read(local_pc);
 
-    int current = 0, aboveLocalPC = 0;
-    while ((aboveLocalPC < 5 || queque_.size () < 10) && opcode != 0x00) { //and !(SR & FLAGS::B))) Break opcode
+    while (local_pc < 0xFFFF) {
 
         opcode = CPU6502->Read(local_pc);
+        std::string line(4, ' ');
         if (CPU6502->instructions.find (opcode) == CPU6502->instructions.end ()) {
-            std::string line (15, ' ');
-            sprintf_s (const_cast<char*>(line.data ()), line.size (), "%04X %s -> %02X", local_pc, "???", opcode);
-            queque_.push_back (line);
-            aboveLocalPC++;
-            if (queque_.size () > 10) {
-                queque_.pop_front ();
-                current--;
-            }
+            sprintf_s (const_cast<char*>(line.data ()), line.size (), "%02X", opcode);
+            map_[local_pc] = line;
+            local_pc++;
             continue;
         }
-        const auto& instruction = CPU6502->instructions[opcode];
 
-        std::string line (9, ' ');
-        sprintf_s (const_cast<char*>(line.data ()), line.size (), "%04X %s", local_pc, instruction.name.data ());
-        line[8] = ' ';
+        const auto& instruction = CPU6502->instructions[opcode];
+        sprintf_s(const_cast<char*>(line.data()), line.size(), "%s", instruction.name.data());
+        line[3] = ' ';
 
         for (uint8_t i = 1; i < instruction.bytes; i++) {
-            std::string buff (3, ' ');
-            sprintf_s (const_cast<char*>(buff.data ()), buff.size (), "%02X", CPU6502->Read(local_pc + i));
+            std::string buff(3, ' ');
+            sprintf_s(const_cast<char*>(buff.data()), buff.size(), "%02X", CPU6502->Read(local_pc + i));
             line += buff.substr(0, 2) + ' ';
         }
-
-        queque_.push_back (line);
-
-        if (local_pc == CPU6502->PC) current = queque_.size () - 1;
-        if (local_pc > CPU6502->PC) aboveLocalPC++;
+        map_[local_pc] = line;
         local_pc += instruction.bytes;
-
-
-        if (queque_.size () > 10) {
-            queque_.pop_front ();
-            current--;
-        }
     }
-    currentLine = current;
-    return queque_;
+    return map_;
 }
 
 int BasicInitGui (NES *nes_cpu) {
@@ -237,6 +220,8 @@ int BasicInitGui (NES *nes_cpu) {
     uint16_t tileWidth, tileHeight;
     GLuint tex = CHRdump(&nes_cpu->PPU2C02, fillTexture, tileWidth, tileHeight);
 
+    auto instructionsMap = instructions_dump(&nes_cpu->CPU6502);
+
     while (!glfwWindowShouldClose (window))
     {   
         glfwPollEvents ();
@@ -248,12 +233,20 @@ int BasicInitGui (NES *nes_cpu) {
         {
             ImGui::Begin ("NES");
 
+            ImGui::Text ("CPU");
             ImGui::Text ("Accumulator %02X", nes_cpu->CPU6502.A);
             ImGui::Text ("X Register %02X", nes_cpu->CPU6502.X);
             ImGui::Text ("Y Register %02X", nes_cpu->CPU6502.Y);
             ImGui::Text ("Stack Pointer %02X", nes_cpu->CPU6502.SP);
             ImGui::Text ("Program Counter %04X", nes_cpu->CPU6502.PC);
             ImGui::Text ("Status Register %c %c %c %c %c %c %c %c", BYTE_TO_BINARY (nes_cpu->CPU6502.SR));
+            ImGui::Text ("PPU");
+            ImGui::Text("PPUCTRL   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(*nes_cpu->PPU2C02.PPUCTRL));
+            ImGui::Text("PPUMASK   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(*nes_cpu->PPU2C02.PPUMASK));
+            ImGui::Text("PPUSTATUS %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(*nes_cpu->PPU2C02.PPUSTATUS));
+            ImGui::Text("OAMADDR   %c %c %c %c %c %c %c %c",   BYTE_TO_BINARY(*nes_cpu->PPU2C02.OAMADDR));
+            ImGui::Text("Current X %i", nes_cpu->PPU2C02.clockCycle);
+            ImGui::Text("Current Y %i", nes_cpu->PPU2C02.horiLines);
 
             /*
             printf ("Accumulator %02X\n", nes_cpu->CPU6502->A);
@@ -266,17 +259,17 @@ int BasicInitGui (NES *nes_cpu) {
             //ImGui::SliderFloat ("float", &f, 0.0f, 1.0f);           
             //ImGui::ColorEdit3 ("clear color", (float*)&clear_color); 
 
-            if (ImGui::Button(nes_cpu->CPU6502.running ? "STOP" : "RUN")) {
-                nes_cpu->CPU6502.running = !nes_cpu->CPU6502.running;
-                //nes_cpu->CPU6502->Run();
+            if (ImGui::Button(nes_cpu->running ? "STOP" : "RUN")) {
+                nes_cpu->running = !nes_cpu->running;
             }
             ImGui::SameLine();
-            if (ImGui::Button("STEP") || nes_cpu->CPU6502.running)
-                nes_cpu->CPU6502.Step();
+            if (ImGui::Button("STEP"))
+                nes_cpu->Step();
             ImGui::SameLine();
             if (ImGui::Button("RESET")) 
-                nes_cpu->CPU6502.Reset();
+                nes_cpu->Reset();
             
+            ImGui::SliderInt("Delay", &nes_cpu->delay, 0, 500);
 
             ImGui::Checkbox(("SHOW INSTRUCTION LIST"), &show_instruction_window);
             ImGui::Checkbox(("SHOW Z PAGE"), &show_zpage);
@@ -289,14 +282,18 @@ int BasicInitGui (NES *nes_cpu) {
         if (show_instruction_window)
         {
             ImGui::Begin ("Instructions", &show_instruction_window);
-
-            uint16_t current = 0;
-            auto queque_ = instructions_dump(&nes_cpu->CPU6502, current);
-            for (int i = 0; i < queque_.size (); i++) {
-                if (current == i) 
-                    ImGui::TextColored({1, 0, 1, 1}, "%s", queque_[i].c_str());
+            int16_t newLines = 10;
+            for (int16_t lineAddr = -newLines; lineAddr < newLines; lineAddr++) {
+                auto it = instructionsMap.find(nes_cpu->CPU6502.PC);
+                std::advance(it, lineAddr);                                                         //kod GOVNO, exception drop.
+                if (it == instructionsMap.end()) {
+                    newLines++;
+                    continue;
+                }
+                if (it->first == nes_cpu->CPU6502.PC)
+                    ImGui::TextColored({1, 0, 1, 1}, "%04X %s", it->first, it->second.c_str());
                 else 
-                    ImGui::Text ("%s", queque_[i].c_str());
+                    ImGui::Text ("%04X %s", it->first, it->second.c_str());
             }
             ImGui::End ();
         }
