@@ -46,7 +46,7 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
 
 
     uint16_t tileWidth = 20;
-    uint16_t tileHeight = 24;
+    uint16_t tileHeight = 26;
     uint16_t width = 8 * tileWidth;
     uint16_t height = 8 * tileHeight;
 

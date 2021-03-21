@@ -7,11 +7,10 @@ public:
 
 	std::vector<uint8_t> CHRROM;
 	std::vector<uint8_t> VRAM;
-	PPU() {
-		
-	}
+	std::vector<uint8_t> paletteTable;
 
     bool Load(uint8_t* pattern, size_t size) {
+		paletteTable.resize(0xFF, 0);
 		VRAM.resize(2048, 0);
 		CHRROM.resize(size);
 		memcpy(CHRROM.data(), pattern, size);
