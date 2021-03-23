@@ -1,25 +1,15 @@
 #pragma once
-#include <iostream>
 #include <algorithm>
 #include <unordered_map>
 #include <vector>
 
+class NES;
+
 class CPU {
+    NES* nes = nullptr;
     uint8_t* memory = nullptr;
 public:
     std::vector<uint8_t> PRGROM;
-    bool Load(uint8_t* program, size_t size) {
-        memory = new uint8_t[0x10000];
-        PRGROM.resize(size);
-        memcpy(PRGROM.data(), program, size);
-        Reset();
-        return true;
-    }
-
-    std::pair<uint8_t*, uint8_t*> getPPULink() {
-        if (!memory) return {0, 0};
-        return {&memory[0x2000], &memory[0x4014]};
-    }
 
     uint16_t clockCycle = 0;
     uint16_t value = 0;
@@ -36,523 +26,15 @@ public:
     uint8_t  SR = 0;         //Status Register
 
     enum FLAGS : uint8_t {
-        C = 1,
-        Z = 2,
-        I = 4,
-        D = 8,
-        B = 16,
+        C = 1,              //Carry
+        Z = 2,              //Zero
+        I = 4,              //Interrupt Disable
+        D = 8,              //Decimal Mode
+        B = 16,             //Break Command
         IGNORED = 32,
-        V = 64,
-        N = 128
+        V = 64,             //Overflow
+        N = 128             //Negative
     };
-
-    void Reset() {
-        for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
-        SP = 0xFF;
-        PC = (uint16_t(Read(0xFFFC + 1)) << 8) | uint16_t(Read(0xFFFC));
-        SR = FLAGS::IGNORED;
-        A = 0;
-        X = 0;
-        Y = 0;
-    }
-
-
-    uint8_t Fetch() {
-        uint8_t fetched = Read(PC);
-        PC++;
-        return fetched;
-    }
-
-    uint8_t& Read(uint16_t addr) {
-        //RAM
-        if (addr >= 0x0000 && addr < 0x0800) {
-            return memory[addr];
-        }
-        //Mirrors of RAM
-        else if (addr >= 0x0800 && addr < 0x2000) {
-            return Read(addr % 0x0800);
-        }
-        //PPU Registers
-        else if (addr >= 0x2000 && addr < 0x2008) {
-            return memory[addr];
-        }
-        //Mirrors of PPU Registers
-        else if (addr >= 0x2008 && addr < 0x4000) {
-            return Read((addr - 0x2000) % 0x0008);
-        }
-        //APU Registers
-        else if (addr >= 0x4000 && addr < 0x4020) {
-            return memory[addr];
-        }
-        //Cartridge Expansion ROM
-        else if (addr >= 0x4000 && addr < 0x6000) {
-            
-        }
-        //SRAM
-        else if (addr >= 0x6000 && addr < 0x8000) {
-            return memory[addr];
-        }
-        //PRG-ROM
-        else if (addr >= 0x8000 && addr <= 0xFFFF) {
-            if(PRGROM.size() > 0x4000)
-                return PRGROM[addr - 0x8000];
-            return PRGROM[(addr - 0x8000) % 0x4000];
-        }
-    }
-
-    void Write(uint16_t addr, uint8_t value) {
-        //RAM
-        if (addr >= 0x0000 && addr < 0x0800) {
-            memory[addr] = value;
-        }
-        //Mirrors of RAM
-        else if (addr >= 0x0800 && addr < 0x2000) {
-            Write(addr % 0x0800, value);
-        }
-        //PPU Registers
-        else if (addr >= 0x2000 && addr < 0x2008) {
-            memory[addr] = value;
-        }
-        //Mirrors of PPU Registers
-        else if (addr >= 0x2008 && addr < 0x4000) {
-            Write((addr - 0x2000) % 0x0008, value);
-        }
-        //APU Registers
-        else if (addr >= 0x4000 && addr < 0x4020) {
-            memory[addr] = value;
-        }
-        //Cartridge Expansion ROM
-        else if (addr >= 0x4000 && addr < 0x6000) {
-            //ROM is Read-Only
-        }
-        //SRAM
-        else if (addr >= 0x6000 && addr < 0x8000) {
-            memory[addr] = value;
-        }
-        //PRG-ROM
-        else if (addr >= 0x8000 && addr < 0xFFFF) {
-            //ROM is Read-Only
-        }
-    }
-
-    void Run() {
-        while (!(SR & FLAGS::B)) {
-            Call();
-        }
-    }
-
-    void Step() {
-        Call();
-    }
-
-    void Call() {
-        if (clockCycle > 0) {
-            clockCycle--;
-            return;
-        }
-        uint8_t opcode = Fetch();
-        if (instructions.find(opcode) != instructions.end()) {
-            (this->*instructions[opcode].mode)(instructions[opcode].command);
-            clockCycle = instructions[opcode].cycles;
-        }
-        else 
-            InvalidCommand(opcode);
-    }
-
-    void InvalidCommand(uint8_t code) {
-        printf("Invalid command : %02X\n", code);
-    }
-
-    void SetFlag(FLAGS flag, bool set) {
-        if (set)
-            SR = SR | flag;
-        else
-            SR = SR & ~flag;
-    }
-
-    //addressing modes 
-    void IMP(void (CPU::* command)()) {
-        (this->*command)();
-    }
-
-    void ACC(void (CPU::* command)()) {
-        isValueRegister = false;
-        (this->*command)();
-    }
-
-    void IMM(void (CPU::* command)()) {
-        value = Fetch();
-        isValueRegister = false;
-        (this->*command)();
-    }
-
-    void ZPG(void (CPU::* command)()) {
-        value = Fetch();
-        isValueRegister = true;
-        (this->*command)();
-    }
-
-    void ZPGX(void (CPU::* command)()) {
-        value = uint8_t(Fetch() + int8_t(X));
-        isValueRegister = true;
-        (this->*command)();
-    }
-
-    void ZPGY(void (CPU::* command)()) {
-        value = uint8_t(Fetch() + int8_t(Y));
-        isValueRegister = true;
-        (this->*command)();
-    }
-
-    void RLT(void (CPU::* command)()) {
-        value = Fetch();
-        isValueRegister = false;
-        (this->*command)();
-    }
-
-    void ABS(void (CPU::* command)()) {
-        uint16_t LSB = Fetch();
-        uint16_t MSB = Fetch();
-        value = (MSB << 8) | LSB;
-        isValueRegister = true;
-        (this->*command)();
-    }
-
-    void ABSX(void (CPU::* command)()) {
-        uint16_t LSB = Fetch();
-        uint16_t MSB = Fetch();
-        value = ((MSB << 8) | LSB) + int8_t(X);
-        isValueRegister = true;
-        if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
-        (this->*command)();
-    }
-
-    void ABSY(void (CPU::* command)()) {
-        uint16_t LSB = Fetch();
-        uint16_t MSB = Fetch();
-        value = ((MSB << 8) | LSB) + int8_t(Y);
-        isValueRegister = true;
-        if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
-        (this->*command)();
-    }
-
-    void IND(void (CPU::* command)()) {
-        uint16_t LSB = Fetch();
-        uint16_t MSB = Fetch();
-        value = ((MSB << 8) | LSB);
-        isValueRegister = true;
-        (this->*command)();
-    }
-
-    void INDX(void (CPU::* command)()) {
-        uint8_t Xval = Fetch();
-        uint8_t pos = Xval + int8_t(X);
-        value = Read(pos);
-        value |= uint16_t(Read(pos + 1)) << 8;
-        isValueRegister = true;
-        (this->*command)();
-    }
-
-    void INDY(void (CPU::* command)()) {
-        uint8_t Yval = Fetch();
-        value = Read(Yval);
-        uint16_t MSB = uint16_t(Read(Yval + 1)) << 8;
-        value |= MSB;
-        value += int8_t(Y);
-        isValueRegister = true;
-        if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
-        (this->*command)();
-    }
-
-    //instructions
-    void LDA() {
-        if (isValueRegister) A = Read(value);
-        else A = value;
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void LDX() {
-        if (isValueRegister) X = Read(value);
-        else X = value;
-        SetFlag(FLAGS::Z, X == 0);
-        SetFlag(FLAGS::N, FLAGS::N & X);
-    }
-
-    void LDY() {
-        if (isValueRegister) Y = Read(value);
-        else Y = value;
-        SetFlag(FLAGS::Z, Y == 0);
-        SetFlag(FLAGS::N, FLAGS::N & Y);
-    }
-
-    void TAX() {
-        X = A;
-        SetFlag(FLAGS::Z, X == 0);
-        SetFlag(FLAGS::N, FLAGS::N & X);
-    }
-
-    void TAY() {
-        Y = A;
-        SetFlag(FLAGS::Z, Y == 0);
-        SetFlag(FLAGS::N, FLAGS::N & Y);
-    }
-
-    void TYA() {
-        A = Y;
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void INX() {
-        X++;
-        SetFlag(FLAGS::Z, X == 0);
-        SetFlag(FLAGS::N, FLAGS::N & X);
-    }
-
-    void INY() {
-        Y++;
-        SetFlag(FLAGS::Z, Y == 0);
-        SetFlag(FLAGS::N, FLAGS::N & Y);
-    }
-
-    void BRK() {                                        //not completed
-        Write(SP, PC);
-        SetFlag(FLAGS::B, true);
-    }
-
-    void ADC() {                                        //not compeled
-        uint8_t edge = std::min(A, (uint8_t)value);
-        A = A + value + (SR & FLAGS::C);
-        SetFlag(FLAGS::C, A < edge);
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void SBC() {                                        //not compeled
-        uint8_t Acopy = A;
-        A = A - value - (1 - (SR & FLAGS::C));
-        SetFlag(FLAGS::C, A > Acopy);
-        SetFlag(FLAGS::Z, A == 0);
-        //SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);           //not valid, tbc
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void AND() {
-        if (isValueRegister) A &= Read(value);
-        else A &= value;
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void STA() {
-        Write(value, A);
-    }
-    void STX() {
-        Write(value, X);
-    }
-    void STY() {
-        Write(value, Y);
-    }
-
-    void JSR() {
-        Write(stackBottom + SP, (PC - 1) >> 8);
-        SP--;
-        Write(stackBottom + SP, PC - 1);
-        SP--;
-        PC = value;
-    }
-
-    void RTS() {
-        uint16_t toPC;
-        SP++;
-        toPC = Read(stackBottom + SP);
-        Write(stackBottom + SP, 0);
-        SP++;
-        toPC |= uint16_t(Read(stackBottom + SP)) << 8;
-        Write(stackBottom + SP, 0);
-        PC = toPC + 1;
-    }
-
-    void CLC() {
-        SetFlag(FLAGS::C, false);
-    }
-
-    void CMP() {
-        uint8_t res, val = value;
-        if (isValueRegister) {
-            res = A - Read(value);
-            val = Read(value);
-        }
-        else
-            res = A - value;
-        SetFlag(FLAGS::C, A >= val);
-        SetFlag(FLAGS::Z, A == val);
-        SetFlag(FLAGS::N, FLAGS::N & res);
-    }
-
-    void CPX() {
-        uint8_t res, val = value;
-        if (isValueRegister) {
-            res = X - Read(value);
-            val = Read(value);
-        }
-        else
-            res = X - value;
-        SetFlag(FLAGS::C, X >= val);
-        SetFlag(FLAGS::Z, X == val);
-        SetFlag(FLAGS::N, FLAGS::N & res);
-    }
-
-    void CPY() {
-        uint8_t res, val = value;
-        if (isValueRegister) {
-            res = Y - Read(value);
-            val = Read(value);
-        }
-        else
-            res = Y - value;
-        SetFlag(FLAGS::C, Y >= val);
-        SetFlag(FLAGS::Z, Y == val);
-        SetFlag(FLAGS::N, FLAGS::N & res);
-    }
-
-    void BEQ() {                                        //not completed
-        if (!(SR & FLAGS::Z)) return;
-        PC += int8_t(value);
-    }
-
-    void BNE() {                                        //not completed
-        if (SR & FLAGS::Z) return;
-        PC += int8_t(value);
-    }
-
-    void BPL() {                                        //not completed
-        if (SR & FLAGS::N) return;
-        PC += int8_t(value);
-    }
-
-    void BMI() {                                        //not completed
-        if (!(SR & FLAGS::N)) return;
-        PC += int8_t(value);
-    }
-
-    void BCC() {                                        //not completed
-        if (SR & FLAGS::C) return;
-        PC += int8_t(value);
-    }
-
-
-    void ORA() {
-        if (isValueRegister)
-            A |= Read(value);
-        else
-            A |= value;
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void EOR() {
-        if (isValueRegister)
-            A ^= Read(value);
-        else
-            A ^= value;
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::N, FLAGS::N & A);
-    }
-
-    void JMP() {
-        PC = value;
-    }
-
-    void BIT() {
-        SetFlag(FLAGS::N, value & FLAGS::N);
-        SetFlag(FLAGS::V, value & FLAGS::V);
-        SetFlag(FLAGS::Z, value & A);
-    }
-
-    void INC() {
-        Read(value)++;
-        SetFlag(FLAGS::Z, Read(value) == 0);
-        SetFlag(FLAGS::N, Read(value) & FLAGS::N);
-    }
-
-    void DEX() {
-        X--;
-        SetFlag(FLAGS::Z, X == 0);
-        SetFlag(FLAGS::N, X & FLAGS::N);
-    }
-    void DEY() {
-        Y--;
-        SetFlag(FLAGS::Z, Y == 0);
-        SetFlag(FLAGS::N, Y & FLAGS::N);
-    }
-
-    void DEC() {
-        Read(value)--;
-        SetFlag(FLAGS::Z, Read(value) == 0);
-        SetFlag(FLAGS::N, Read(value) & FLAGS::N);
-    }
-
-    void TXA() {
-        A = X;
-        SetFlag(FLAGS::Z, A == 0);
-        SetFlag(FLAGS::N, A & FLAGS::N);
-    }
-    
-    void PHA() {
-        Write(stackBottom + SP, A);
-        SP--;
-    }
-
-    void PLA() {
-        SP++;
-        A = Read(stackBottom + SP);
-    }
-
-    void TXS() {
-        Write(stackBottom + SP, X);
-        SP--;
-    }
-
-    void LSR() {
-        uint8_t* ptr = &A;
-        if (isValueRegister) {
-            ptr = &Read(value);                 //May cause a crash
-        }
-        SetFlag(FLAGS::C, *ptr & FLAGS::C);
-        *ptr >>= 1;
-        SetFlag(FLAGS::Z, *ptr == 0);
-        SetFlag(FLAGS::N, *ptr & FLAGS::N);
-    }
-
-    void ASL() {
-        uint8_t* ptr = &A;
-        if (isValueRegister) {
-            ptr = &Read(value);                 //May cause a crash
-        }
-        SetFlag(FLAGS::C, *ptr & FLAGS::C);
-        *ptr <<= 1;
-        SetFlag(FLAGS::Z, *ptr == 0);
-        SetFlag(FLAGS::N, *ptr & FLAGS::N);
-    }
-
-    void SEC() {
-        SetFlag(FLAGS::C, true);
-    }
-
-    void SEI() {
-        SetFlag(FLAGS::I, false);
-    }
-
-    void CLD() {
-        SetFlag(FLAGS::D, false);
-    }
-
-    void NOP() {
-        return;
-    }
 
     struct Command {
         void (CPU::* command)();
@@ -604,7 +86,11 @@ public:
         {0x91, {&CPU::STA, &CPU::INDY, "STA", 2, 6}},
         {0x81, {&CPU::STA, &CPU::INDX, "STA", 2, 6}},
         {0x86, {&CPU::STX, &CPU::ZPG,  "STX", 2, 3}},
+        {0x96, {&CPU::STX, &CPU::ZPGY, "STX", 2, 4}},
+        {0x8E, {&CPU::STX, &CPU::ABS,  "STX", 3, 4}},
         {0x84, {&CPU::STY, &CPU::ZPG,  "STY", 2, 3}},
+        {0x94, {&CPU::STY, &CPU::ZPGY, "STY", 2, 4}},
+        {0x8C, {&CPU::STY, &CPU::ABS,  "STY", 3, 4}},
         {0x20, {&CPU::JSR, &CPU::ABS,  "JSR", 3, 6}},
         {0x60, {&CPU::RTS, &CPU::IMP,  "RTS", 1, 6}},
         {0x18, {&CPU::CLC, &CPU::IMP,  "CLC", 1, 2}},
@@ -633,7 +119,14 @@ public:
         {0x19, {&CPU::ORA, &CPU::ABSY, "ORA", 3, 4}},
         {0x01, {&CPU::ORA, &CPU::INDX, "ORA", 2, 6}},
         {0x11, {&CPU::ORA, &CPU::INDY, "ORA", 2, 5}},
+        {0x49, {&CPU::EOR, &CPU::IMM,  "EOR", 2, 2}},
+        {0x45, {&CPU::EOR, &CPU::ZPG,  "EOR", 2, 3}},
+        {0x55, {&CPU::EOR, &CPU::ZPGX, "EOR", 2, 4}},
+        {0x4D, {&CPU::EOR, &CPU::ABS,  "EOR", 3, 4}},
+        {0x5D, {&CPU::EOR, &CPU::ABSX, "EOR", 3, 4}},
+        {0x59, {&CPU::EOR, &CPU::ABSY, "EOR", 3, 4}},
         {0x41, {&CPU::EOR, &CPU::INDX, "EOR", 2, 6}},
+        {0x51, {&CPU::EOR, &CPU::INDY, "EOR", 2, 5}},
         {0x4C, {&CPU::JMP, &CPU::ABS,  "JMP", 3, 3}},
         {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}},
         {0x24, {&CPU::BIT, &CPU::ZPG,  "BIT", 2, 3}},
@@ -661,8 +154,92 @@ public:
         {0x78, {&CPU::SEI, &CPU::IMP,  "SEI", 1, 2}},
         {0xD8, {&CPU::CLD, &CPU::IMP,  "CLD", 1, 2}},
         {0x9A, {&CPU::TXS, &CPU::IMP,  "TXS", 1, 2}},
-        {0x0A, {&CPU::ASL, &CPU::ACC,  "ASL", 1, 2}}
+        {0x0A, {&CPU::ASL, &CPU::ACC,  "ASL", 1, 2}},
+        {0x2A, {&CPU::ROL, &CPU::ACC,  "ROL", 1, 2}},
+        {0x26, {&CPU::ROL, &CPU::ZPG,  "ROL", 2, 5}},
+        {0x36, {&CPU::ROL, &CPU::ZPGX, "ROL", 2, 6}},
+        {0x2E, {&CPU::ROL, &CPU::ABS,  "ROL", 3, 6}},
+        {0x3E, {&CPU::ROL, &CPU::ABSX, "ROL", 3, 7}},
+        {0x40, {&CPU::RTI, &CPU::IMP,  "RTI", 1, 6}}
     };
 
-};
+    bool Load(uint8_t* program, size_t size);
+    void ConnectToNes(NES* nes);
+    void NMI();
+    void Reset();
+    void IRQ();
+    void StackPush16b(uint16_t value);
+    void StackPush8b(uint8_t value);
+    uint16_t StackPop16b();
+    uint8_t StackPop8b();
+    uint8_t Fetch();
+    uint8_t& Read(uint16_t addr);
+    void Write(uint16_t addr, uint8_t value);
+    void Run();
+    void Step();
+    void Call();
+    void InvalidCommand(uint8_t code);
+    void SetFlag(FLAGS flag, bool set);
+    //addressing modes 
+    void IMP (void (CPU::* command)());
+    void ACC (void (CPU::* command)());
+    void IMM (void (CPU::* command)());
+    void ZPG (void (CPU::* command)());
+    void ZPGX(void (CPU::* command)());
+    void ZPGY(void (CPU::* command)());
+    void RLT (void (CPU::* command)());
+    void ABS (void (CPU::* command)());
+    void ABSX(void (CPU::* command)());
+    void ABSY(void (CPU::* command)());
+    void IND (void (CPU::* command)());
+    void INDX(void (CPU::* command)());
+    void INDY(void (CPU::* command)());
+    //instructions
+    void LDA();
+    void LDX();
+    void LDY();
+    void TAX();
+    void TAY();
+    void TYA();
+    void INX();
+    void INY();
+    void BRK();
+    void ADC();
+    void SBC();
+    void AND();
+    void STA();
+    void STX();
+    void STY();
+    void JSR();
+    void RTS();
+    void CLC();
+    void CMP();
+    void CPX();
+    void CPY();
+    void BEQ();
+    void BNE();
+    void BPL();
+    void BMI();
+    void BCC();
+    void ORA();
+    void EOR();
+    void JMP();
+    void BIT();
+    void INC();
+    void DEX();
+    void DEY();
+    void DEC();
+    void TXA();
+    void PHA();
+    void PLA();
+    void TXS();
+    void LSR();
+    void ASL();
+    void SEC();
+    void SEI();
+    void CLD();
+    void NOP();
+    void ROL();
+    void RTI();
 
+};

@@ -28,8 +28,7 @@ using namespace gl;
 
 #include <GLFW/glfw3.h>
 #include <stdio.h>
-#include "Defines.h"
-#include "NES6502.h"
+#include <map>
 #include "Shader.h"
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
@@ -113,7 +112,7 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
 
 std::map<uint16_t, std::string> instructions_dump(CPU *CPU6502) {
     std::map<uint16_t, std::string> map_;
-
+    return map_;
     uint16_t local_pc = CPU6502->startAddr;
     uint8_t opcode = CPU6502->Read(local_pc);
 
@@ -213,6 +212,7 @@ int BasicInitGui (NES *nes_cpu) {
 
     bool show_instruction_window = false;
     bool show_zpage = false;
+    bool show_vram = false;
 
     ImVec4 clear_color = ImVec4 (0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -241,10 +241,10 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::Text ("Program Counter %04X", nes_cpu->CPU6502.PC);
             ImGui::Text ("Status Register %c %c %c %c %c %c %c %c", BYTE_TO_BINARY (nes_cpu->CPU6502.SR));
             ImGui::Text ("PPU");
-            ImGui::Text("PPUCTRL   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(*nes_cpu->PPU2C02.PPUCTRL));
-            ImGui::Text("PPUMASK   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(*nes_cpu->PPU2C02.PPUMASK));
-            ImGui::Text("PPUSTATUS %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(*nes_cpu->PPU2C02.PPUSTATUS));
-            ImGui::Text("OAMADDR   %c %c %c %c %c %c %c %c",   BYTE_TO_BINARY(*nes_cpu->PPU2C02.OAMADDR));
+            ImGui::Text("PPUCTRL   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.PPUCTRL));
+            ImGui::Text("PPUMASK   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.PPUMASK));
+            ImGui::Text("PPUSTATUS %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.PPUSTATUS));
+            ImGui::Text("OAMADDR   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.OAMADDR));
             ImGui::Text("Current X %i", nes_cpu->PPU2C02.clockCycle);
             ImGui::Text("Current Y %i", nes_cpu->PPU2C02.horiLines);
 
@@ -273,6 +273,7 @@ int BasicInitGui (NES *nes_cpu) {
 
             ImGui::Checkbox(("SHOW INSTRUCTION LIST"), &show_instruction_window);
             ImGui::Checkbox(("SHOW Z PAGE"), &show_zpage);
+            ImGui::Checkbox(("SHOW VRAM"), &show_vram);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO ().Framerate, ImGui::GetIO ().Framerate);
 
@@ -296,6 +297,25 @@ int BasicInitGui (NES *nes_cpu) {
                     ImGui::Text ("%04X %s", it->first, it->second.c_str());
             }
             ImGui::End ();
+        }
+
+        if (show_vram)
+        {
+            ImGui::Begin("VRAM", &show_vram);
+            
+            for (uint16_t row = 0x00; row < 30; row++) {
+                std::string line(4, ' ');
+                sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
+                line[3] = ' ';
+                for (uint16_t column = 0; column < 32; column++) {
+                    std::string val(3, ' ');
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->CPU6502.Read(column));
+                    line += val.substr(0, 2) + " ";
+                }
+                ImGui::Text(line.c_str());
+            }
+
+            ImGui::End();
         }
 
         if (show_zpage)

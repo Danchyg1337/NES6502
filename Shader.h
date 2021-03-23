@@ -1,5 +1,6 @@
 #pragma once
 #include <sstream>
+#include <iostream>
 
 namespace primitive {
 	float square[] = {

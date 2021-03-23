@@ -48,6 +48,15 @@
     <ClCompile Include="imgui\imgui_widgets.cpp">
       <Filter>Исходные файлы\Source Code</Filter>
     </ClCompile>
+    <ClCompile Include="CPU.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="NES6502.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="PPU.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Defines.h">
