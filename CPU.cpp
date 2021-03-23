@@ -437,6 +437,10 @@ void CPU::BCC() {                                        //not completed
     PC += int8_t(value);
 }
 
+void CPU::BVC() {                                        //not completed
+    if (SR & FLAGS::V) return;
+    PC += int8_t(value);
+}
 
 void CPU::ORA() {
     if (isValueRegister)
@@ -555,6 +559,14 @@ void CPU::SEI() {
 
 void CPU::CLD() {
     SetFlag(FLAGS::D, false);
+}
+
+void CPU::SED() {
+    SetFlag(FLAGS::D, true);
+}
+
+void CPU::CLV() {
+    SetFlag(FLAGS::V, false);
 }
 
 void CPU::RTI() {

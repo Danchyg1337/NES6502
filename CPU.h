@@ -113,6 +113,7 @@ public:
         {0x10, {&CPU::BPL, &CPU::RLT,  "BPL", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x90, {&CPU::BCC, &CPU::RLT,  "BCC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x30, {&CPU::BMI, &CPU::RLT,  "BMI", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x50, {&CPU::BVC, &CPU::RLT,  "BVC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x09, {&CPU::ORA, &CPU::IMM,  "ORA", 2, 2}},
         {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
         {0x1D, {&CPU::ORA, &CPU::ABSX, "ORA", 3, 4}},
@@ -151,6 +152,13 @@ public:
         {0x5E, {&CPU::LSR, &CPU::ABSX, "LSR", 3, 7}},
         {0x38, {&CPU::SEC, &CPU::IMP,  "SEC", 1, 2}},
         {0xE9, {&CPU::SBC, &CPU::IMM,  "SBC", 2, 2}},
+        {0xE5, {&CPU::SBC, &CPU::ZPG,  "SBC", 2, 3}},
+        {0xF5, {&CPU::SBC, &CPU::ZPGX, "SBC", 2, 4}},
+        {0xED, {&CPU::SBC, &CPU::ABS,  "SBC", 3, 4}},
+        {0xFD, {&CPU::SBC, &CPU::ABSX, "SBC", 3, 4}},
+        {0xF9, {&CPU::SBC, &CPU::ABSY, "SBC", 3, 4}},
+        {0xE1, {&CPU::SBC, &CPU::INDX, "SBC", 2, 6}},
+        {0xF1, {&CPU::SBC, &CPU::INDY, "SBC", 2, 5}},
         {0x78, {&CPU::SEI, &CPU::IMP,  "SEI", 1, 2}},
         {0xD8, {&CPU::CLD, &CPU::IMP,  "CLD", 1, 2}},
         {0x9A, {&CPU::TXS, &CPU::IMP,  "TXS", 1, 2}},
@@ -160,7 +168,9 @@ public:
         {0x36, {&CPU::ROL, &CPU::ZPGX, "ROL", 2, 6}},
         {0x2E, {&CPU::ROL, &CPU::ABS,  "ROL", 3, 6}},
         {0x3E, {&CPU::ROL, &CPU::ABSX, "ROL", 3, 7}},
-        {0x40, {&CPU::RTI, &CPU::IMP,  "RTI", 1, 6}}
+        {0x40, {&CPU::RTI, &CPU::IMP,  "RTI", 1, 6}},
+        {0xF8, {&CPU::SED, &CPU::IMP,  "SED", 1, 2}},
+        {0xB8, {&CPU::CLV, &CPU::IMP,  "CLV ", 1, 2}}
     };
 
     bool Load(uint8_t* program, size_t size);
@@ -221,6 +231,7 @@ public:
     void BPL();
     void BMI();
     void BCC();
+    void BVC();
     void ORA();
     void EOR();
     void JMP();
@@ -241,5 +252,7 @@ public:
     void NOP();
     void ROL();
     void RTI();
+    void SED();
+    void CLV();
 
 };
