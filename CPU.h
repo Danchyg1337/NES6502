@@ -8,6 +8,7 @@ class NES;
 class CPU {
     NES* nes = nullptr;
     uint8_t* memory = nullptr;
+    uint8_t controllerStatus = 0;
 public:
     std::vector<uint8_t> PRGROM;
 
@@ -17,6 +18,10 @@ public:
 
     uint16_t startAddr = 0x8000;
     uint16_t stackBottom = 0x0100;
+
+    bool controllerStrobe = false;
+    int8_t controllerIndex = 7;
+    uint8_t controllerValue = 0;
 
     uint8_t  A = 0;          //Accumulator
     uint8_t  X = 0;          //X Register

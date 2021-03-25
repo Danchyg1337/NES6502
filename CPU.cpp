@@ -91,10 +91,19 @@ uint8_t& CPU::Read(uint16_t addr) {
     }
     //APU Registers
     else if (addr >= 0x4000 && addr < 0x4020) {
+        if (addr == 0x4016) {
+            controllerStatus = controllerValue & FLAGS::Z;
+            if (!controllerStrobe) {
+                controllerStatus = (controllerValue >> controllerIndex) & 0x1;
+                controllerIndex--;
+                if (controllerIndex < 0) controllerIndex++;
+            }
+            return controllerStatus;
+        }
         return memory[addr];
     }
     //Cartridge Expansion ROM
-    else if (addr >= 0x4000 && addr < 0x6000) {
+    else if (addr >= 0x4020 && addr < 0x6000) {
 
     }
     //SRAM
@@ -129,10 +138,15 @@ void CPU::Write(uint16_t addr, uint8_t value) {
     }
     //APU Registers
     else if (addr >= 0x4000 && addr < 0x4020) {
-        memory[addr] = value;
+        if (addr == 0x4016) {
+            controllerStrobe = value & 0x1;
+            if (controllerStrobe) controllerIndex = 7;
+        }
+        else
+            memory[addr] = value;
     }
     //Cartridge Expansion ROM
-    else if (addr >= 0x4000 && addr < 0x6000) {
+    else if (addr >= 0x4020 && addr < 0x6000) {
         //ROM is Read-Only
     }
     //SRAM

@@ -184,6 +184,38 @@ std::map<uint16_t, std::string> instructions_dump(CPU *CPU6502) {
     return map_;
 }
 
+bool keys[1024];
+void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int modes) {
+    if (action == GLFW_PRESS) {
+        keys[key] = true;
+    }
+    else if (action == GLFW_RELEASE) {
+        keys[key] = false;
+    }
+}
+
+void PassInputs(NES* nes) {
+    if (!nes) return;
+    nes->CPU6502.controllerValue = 0;
+    if (keys[GLFW_KEY_RIGHT])
+        nes->CPU6502.controllerValue |= 1;
+    if (keys[GLFW_KEY_LEFT])
+        nes->CPU6502.controllerValue |= 2;
+    if (keys[GLFW_KEY_DOWN])
+        nes->CPU6502.controllerValue |= 4;
+    if (keys[GLFW_KEY_UP])
+        nes->CPU6502.controllerValue |= 8;
+    if (keys[GLFW_KEY_ENTER])
+        nes->CPU6502.controllerValue |= 16;
+    if (keys[GLFW_KEY_LEFT_SHIFT])
+        nes->CPU6502.controllerValue |= 32;
+    if (keys[GLFW_KEY_Z])
+        nes->CPU6502.controllerValue |= 64;
+    if (keys[GLFW_KEY_X])
+        nes->CPU6502.controllerValue |= 128;
+
+}
+
 int BasicInitGui (NES *nes_cpu) {
     if (!nes_cpu) return 1;
     // Setup window
@@ -216,6 +248,8 @@ int BasicInitGui (NES *nes_cpu) {
         return 1;
     glfwMakeContextCurrent (window);
     glfwSwapInterval (1); // Enable vsync
+
+    glfwSetKeyCallback(window, KeyCallback);
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL (window, true);
@@ -277,6 +311,8 @@ int BasicInitGui (NES *nes_cpu) {
 
     while (!glfwWindowShouldClose (window))
     {   
+        PassInputs(nes_cpu);
+
         ConnectTexture(secondFramebuffer, backgroundTexture);
         RenderBackground(nes_cpu->PPU2C02.toRender, chrTex, secondFramebuffer, backgroundShader, squareVAO);
         
