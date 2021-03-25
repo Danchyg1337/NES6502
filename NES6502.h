@@ -20,6 +20,8 @@ public:
     bool running = false;
 
     int delay = 100;
+
+    uint16_t clockCycle = 0;
 public:
 
     bool LoadRom(std::string filename, bool rawcode = false);

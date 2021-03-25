@@ -103,5 +103,11 @@
     <None Include="Shaders\chrdump.glsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="Shaders\background.glsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\textureToScreen.glsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

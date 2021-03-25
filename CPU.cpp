@@ -17,14 +17,16 @@ void CPU::ConnectToNes(NES* nes) {
 
 void CPU::NMI() {
     StackPush16b(PC);
-    StackPush16b(SR);
+    StackPush8b(SR);
+    SetFlag(FLAGS::B, false);
     SetFlag(FLAGS::I, true);
     PC = (uint16_t(Read(0xFFFA + 1)) << 8) | uint16_t(Read(0xFFFA));
+    clockCycle = 8;
 }
 
 void CPU::Reset() {
     for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
-    SP = 0xFF;
+    SP = 0xFD;
     PC = (uint16_t(Read(0xFFFC + 1)) << 8) | uint16_t(Read(0xFFFC));
     SR = FLAGS::IGNORED;
     A = 0;
@@ -33,15 +35,18 @@ void CPU::Reset() {
 }
 
 void CPU::IRQ() {
+    if (SR & FLAGS::I) return;
     StackPush16b(PC);
     StackPush8b(SR);
+    SetFlag(FLAGS::B, false);
     SetFlag(FLAGS::I, true);
     PC = (uint16_t(Read(0xFFFE + 1)) << 8) | uint16_t(Read(0xFFFE));
+    clockCycle = 7;
 }
 
 void CPU::StackPush16b(uint16_t value) {
-    StackPush8b(value >> 8);
     StackPush8b(value);
+    StackPush8b(value >> 8);
 }
 
 void CPU::StackPush8b(uint8_t value) {
@@ -50,8 +55,8 @@ void CPU::StackPush8b(uint8_t value) {
 }
 
 uint16_t CPU::StackPop16b() {
-    uint8_t LSB = StackPop8b();
-    return (uint16_t(StackPop8b()) << 8) | LSB;
+    uint8_t MSB = StackPop8b();
+    return StackPop8b() | (uint16_t(MSB) << 8);
 }
 uint8_t CPU::StackPop8b() {
     SP++;
@@ -156,6 +161,7 @@ void CPU::Call() {
         return;
     }
     uint8_t opcode = Fetch();
+    //printf("%04X %02X\n", PC - 1, opcode);
     if (instructions.find(opcode) != instructions.end()) {
         (this->*instructions[opcode].mode)(instructions[opcode].command);
         clockCycle = instructions[opcode].cycles;
@@ -166,6 +172,7 @@ void CPU::Call() {
 
 void CPU::InvalidCommand(uint8_t code) {
     printf("Invalid command : %02X\n", code);
+    system("pause");
 }
 
 void CPU::SetFlag(FLAGS flag, bool set) {
@@ -263,7 +270,7 @@ void CPU::INDY(void (CPU::* command)()) {
     value = Read(Yval);
     uint16_t MSB = uint16_t(Read(Yval + 1)) << 8;
     value |= MSB;
-    value += int8_t(Y);
+    value += Y;
     isValueRegister = true;
     if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
     (this->*command)();
@@ -322,7 +329,12 @@ void CPU::INY() {
 }
 
 void CPU::BRK() {
-    IRQ();
+    StackPush16b(PC);
+    SetFlag(FLAGS::B, true);
+    SetFlag(FLAGS::I, true);
+    StackPush8b(SR);
+    SetFlag(FLAGS::B, false);
+    PC = (uint16_t(Read(0xFFFE + 1)) << 8) | uint16_t(Read(0xFFFE));
 }
 
 void CPU::ADC() {                                        //not compeled
@@ -412,33 +424,38 @@ void CPU::CPY() {
     SetFlag(FLAGS::N, FLAGS::N & res);
 }
 
-void CPU::BEQ() {                                        //not completed
+void CPU::BEQ() {                                       
     if (!(SR & FLAGS::Z)) return;
     PC += int8_t(value);
 }
 
-void CPU::BNE() {                                        //not completed
+void CPU::BNE() {                                       
     if (SR & FLAGS::Z) return;
     PC += int8_t(value);
 }
 
-void CPU::BPL() {                                        //not completed
+void CPU::BPL() {                                       
     if (SR & FLAGS::N) return;
     PC += int8_t(value);
 }
 
-void CPU::BMI() {                                        //not completed
+void CPU::BMI() {                                       
     if (!(SR & FLAGS::N)) return;
     PC += int8_t(value);
 }
 
-void CPU::BCC() {                                        //not completed
+void CPU::BCC() {                                       
     if (SR & FLAGS::C) return;
     PC += int8_t(value);
 }
 
-void CPU::BVC() {                                        //not completed
+void CPU::BVC() {                                       
     if (SR & FLAGS::V) return;
+    PC += int8_t(value);
+}
+
+void CPU::BCS() {
+    if (!(SR & FLAGS::C)) return;
     PC += int8_t(value);
 }
 
@@ -500,25 +517,21 @@ void CPU::TXA() {
 }
 
 void CPU::PHA() {
-    Write(stackBottom + SP, A);
-    SP--;
+    StackPush8b(A);
 }
 
 void CPU::PLA() {
-    SP++;
-    A = Read(stackBottom + SP);
+    A = StackPop8b();
 }
 
 void CPU::TXS() {
-    Write(stackBottom + SP, X);
-    SP--;
+    StackPush8b(X);
 }
 
 void CPU::ROL() {
     uint8_t* ptr = &A;
-    if (isValueRegister) {
-        ptr = &Read(value);                 //May cause a crash
-    }
+    if (isValueRegister)
+        ptr = &Read(value);              
     bool old = SR & FLAGS::C;
     SetFlag(FLAGS::C, *ptr & FLAGS::N);
     *ptr <<= 1;
@@ -527,11 +540,22 @@ void CPU::ROL() {
     SetFlag(FLAGS::N, *ptr & FLAGS::N);
 }
 
+void CPU::ROR() {
+    uint8_t* ptr = &A;
+    if (isValueRegister) 
+        ptr = &Read(value);                
+    bool old = SR & FLAGS::C;
+    SetFlag(FLAGS::C, *ptr & FLAGS::C);
+    *ptr >>= 1;
+    *ptr |= uint8_t(old) << 7;
+    SetFlag(FLAGS::Z, *ptr == 0);
+    SetFlag(FLAGS::N, *ptr & FLAGS::N);
+}
+
 void CPU::LSR() {
     uint8_t* ptr = &A;
-    if (isValueRegister) {
-        ptr = &Read(value);                 //May cause a crash
-    }
+    if (isValueRegister) 
+        ptr = &Read(value);                 
     SetFlag(FLAGS::C, *ptr & FLAGS::C);
     *ptr >>= 1;
     SetFlag(FLAGS::Z, *ptr == 0);
@@ -540,9 +564,8 @@ void CPU::LSR() {
 
 void CPU::ASL() {
     uint8_t* ptr = &A;
-    if (isValueRegister) {
-        ptr = &Read(value);                 //May cause a crash
-    }
+    if (isValueRegister) 
+        ptr = &Read(value);      
     SetFlag(FLAGS::C, *ptr & FLAGS::C);
     *ptr <<= 1;
     SetFlag(FLAGS::Z, *ptr == 0);
@@ -572,6 +595,14 @@ void CPU::CLV() {
 void CPU::RTI() {
     SR = StackPop8b();
     PC = StackPop16b();
+}
+
+void CPU::PHP() {
+    StackPush8b(SR);
+}
+
+void CPU::PLP() {
+    SR = StackPop8b();
 }
 
 void CPU::NOP() {

@@ -40,19 +40,20 @@ static void glfw_error_callback (int error, const char* description)
     fprintf (stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, uint8_t bank = 0) {
-    if (!ppu || ppu->CHRROM.size() == 0) return -1;
-
-
-    uint16_t tileWidth = 20;
-    uint16_t tileHeight = 26;
-    uint16_t width = 8 * tileWidth;
-    uint16_t height = 8 * tileHeight;
-
+GLuint CreateFramebuffer(){
     GLuint framebuffer;
     glGenFramebuffers(1, &framebuffer);
+    return framebuffer;
+}
+
+void ConnectTexture(GLuint framebuffer, GLuint texture) {
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+}
+
+
+void GetSquareVAOnVBO(GLuint& VBO, GLuint& VAO) {
     GLuint squareVAO, squareVBO;
     glGenVertexArrays(1, &squareVAO);
     glGenBuffers(1, &squareVBO);
@@ -63,7 +64,11 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    VAO = squareVAO;
+    VBO = squareVBO;
+}
 
+GLuint CreateTexture(uint16_t Width, uint16_t Height) {
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -72,19 +77,56 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    return texture;
+}
+
+void RenderBackground(std::vector<uint8_t> data, GLuint chrTex, GLuint dstFramebuffer, Shader& backgroundShader, GLuint vao) {
+    if (chrTex == -1) return;
     
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
-    
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFramebuffer);
+    glBindVertexArray(vao);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, chrTex);
+
+    float palette[9] = { 1, 0, 0,
+                        0, 1, 0,
+                        0, 0, 1 };
+
+    backgroundShader.Use();
+    int width, height;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+    glUniform1ui(backgroundShader.SetUniform("tilesWidth"), width / 8);
+    glUniform1ui(backgroundShader.SetUniform("tilesHeight"), height / 8);
+    glUniformMatrix3fv(backgroundShader.SetUniform("palette"), 1, GL_FALSE, palette);
+    glUniform1i(backgroundShader.SetUniform("chrTex"), 0);
+    glUniform1uiv(backgroundShader.SetUniform("data"), data.size() / 4, (GLuint*)data.data());
+    glViewport(0, 0, 8 * 32, 8 * 30);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void CHRdump(PPU* ppu, Shader& fillTexture, GLuint dstFramebuffer, GLuint VAO,uint8_t bank = 0) {
+    if (!ppu || ppu->CHRROM.size() == 0) return;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFramebuffer);
+    glBindVertexArray(VAO);
+
     GLenum drawbuffer[1] = { GL_COLOR_ATTACHMENT0 };
     glDrawBuffers(1, drawbuffer);
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return -1;
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return;
 
-    uint16_t offset = 0x2000 *bank;
+    uint16_t offset = 0x2000 * bank;
     float palette[9] = {1, 0, 0,
                         0, 1, 0,
-                        0, 0, 1};
+                        0, 0, 1 };
 
     GLuint chrBlock;
     glGenBuffers(1, &chrBlock);
@@ -96,8 +138,11 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, chrBlock);
 
     fillTexture.Use();
-    glUniform1f(fillTexture.SetUniform("width"), tileWidth);
-    glUniform1f(fillTexture.SetUniform("height"), tileHeight);
+    int width, height;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+    glUniform1f(fillTexture.SetUniform("width"), width / 8);
+    glUniform1f(fillTexture.SetUniform("height"), height / 8);
     glUniformMatrix3fv(fillTexture.SetUniform("palette"), 1, GL_FALSE, palette);
     glViewport(0, 0, width, height);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -105,9 +150,6 @@ GLuint CHRdump(PPU* ppu, Shader& fillTexture, uint16_t &tileW, uint16_t &tileH, 
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
     glBindVertexArray(0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    tileH = tileHeight;
-    tileW = tileWidth;
-    return texture;
 }
 
 std::map<uint16_t, std::string> instructions_dump(CPU *CPU6502) {
@@ -216,14 +258,44 @@ int BasicInitGui (NES *nes_cpu) {
 
     ImVec4 clear_color = ImVec4 (0.45f, 0.55f, 0.60f, 1.00f);
 
-    Shader fillTexture("Shaders/chrdump.glsl");
-    uint16_t tileWidth, tileHeight;
-    GLuint tex = CHRdump(&nes_cpu->PPU2C02, fillTexture, tileWidth, tileHeight);
+    Shader chrDumpShader("Shaders/chrdump.glsl");
+    Shader backgroundShader("Shaders/background.glsl");
+    Shader screenShader("Shaders/textureToScreen.glsl");
+    uint16_t tileWidth = 20, tileHeight = 26;
+    GLuint chrTex = CreateTexture(8 * tileWidth, 8 * tileHeight);
+    GLuint backgroundTexture = CreateTexture(8 * 32, 8 * 30);
+    
+    GLuint secondFramebuffer = CreateFramebuffer();
+    ConnectTexture(secondFramebuffer, chrTex);
+
+    GLuint squareVAO, squareVBO;
+    GetSquareVAOnVBO(squareVAO, squareVBO);
+
+    CHRdump(&nes_cpu->PPU2C02, chrDumpShader, secondFramebuffer, squareVAO);
 
     auto instructionsMap = instructions_dump(&nes_cpu->CPU6502);
 
     while (!glfwWindowShouldClose (window))
     {   
+        ConnectTexture(secondFramebuffer, backgroundTexture);
+        RenderBackground(nes_cpu->PPU2C02.toRender, chrTex, secondFramebuffer, backgroundShader, squareVAO);
+        
+        
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+        glClear(GL_COLOR_BUFFER_BIT);
+        
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindVertexArray(squareVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, backgroundTexture);
+        screenShader.Use();
+        glUniform1i(screenShader.SetUniform("InputTexture"), 0);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
         glfwPollEvents ();
         ImGui_ImplOpenGL3_NewFrame ();
         ImGui_ImplGlfw_NewFrame ();
@@ -245,6 +317,9 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::Text("PPUMASK   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.PPUMASK));
             ImGui::Text("PPUSTATUS %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.PPUSTATUS));
             ImGui::Text("OAMADDR   %c %c %c %c %c %c %c %c", BYTE_TO_BINARY(nes_cpu->PPU2C02.OAMADDR));
+            ImGui::Text("VRAM Address %04X", nes_cpu->PPU2C02.VRAMaddr);
+            ImGui::Text("PPUADDR %02X", nes_cpu->PPU2C02.PPUADDR);
+            ImGui::Text("PPUDATA %02X", nes_cpu->PPU2C02.PPUDATA);
             ImGui::Text("Current X %i", nes_cpu->PPU2C02.clockCycle);
             ImGui::Text("Current Y %i", nes_cpu->PPU2C02.horiLines);
 
@@ -269,7 +344,7 @@ int BasicInitGui (NES *nes_cpu) {
             if (ImGui::Button("RESET")) 
                 nes_cpu->Reset();
             
-            ImGui::SliderInt("Delay", &nes_cpu->delay, 0, 500);
+            ImGui::SliderInt("Delay", &nes_cpu->delay, 0, 5000);
 
             ImGui::Checkbox(("SHOW INSTRUCTION LIST"), &show_instruction_window);
             ImGui::Checkbox(("SHOW Z PAGE"), &show_zpage);
@@ -309,7 +384,7 @@ int BasicInitGui (NES *nes_cpu) {
                 line[3] = ' ';
                 for (uint16_t column = 0; column < 32; column++) {
                     std::string val(3, ' ');
-                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->CPU6502.Read(column));
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->PPU2C02.VRAM[32 * row + column]);
                     line += val.substr(0, 2) + " ";
                 }
                 ImGui::Text(line.c_str());
@@ -349,16 +424,9 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::End();
         }
         
-        if(tex != -1) ImGui::Image((void*)(intptr_t)tex, { float(tileWidth * 32), float(tileHeight * 32) });
+        ImGui::Image((void*)(intptr_t)chrTex, { float(tileWidth * 32), float(tileHeight * 32) });
 
         ImGui::Render ();
-        int display_w, display_h;
-        glfwGetFramebufferSize (window, &display_w, &display_h);
-        glViewport (0, 0, display_w, display_h);
-        glClearColor (clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-        glClear (GL_COLOR_BUFFER_BIT);
-        
-
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);

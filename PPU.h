@@ -5,15 +5,22 @@ class NES;
 
 class PPU {
 	NES* nes = nullptr;
+	void WriteData(uint16_t addr, uint8_t value);
+	uint8_t ReadData(uint16_t addr);
 public:
 	uint16_t clockCycle = 0;
 	int16_t horiLines = 0;
 
+	uint8_t fetched;
+
 	uint16_t VRAMaddr = 0x0;
 	bool addrLatch = false;
 
+	bool frameIsReady = false;
+
 	std::vector<uint8_t> CHRROM;
 	std::vector<uint8_t> VRAM;
+	std::vector<uint8_t> toRender;			//ready copy of VRAM
 	std::vector<uint8_t> paletteTable;
 
 	uint8_t PPUCTRL;	//2000

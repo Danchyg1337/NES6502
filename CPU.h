@@ -60,7 +60,7 @@ public:
         {0xBE, {&CPU::LDX, &CPU::ABSY, "LDX", 3, 4}},           
         {0xA0, {&CPU::LDY, &CPU::IMM,  "LDY", 2, 2}},
         {0xA4, {&CPU::LDY, &CPU::ZPG,  "LDY", 2, 3}},
-        {0xB0, {&CPU::LDY, &CPU::ZPGX, "LDY", 2, 4}},
+        {0xB4, {&CPU::LDY, &CPU::ZPGX, "LDY", 2, 4}},
         {0xAC, {&CPU::LDY, &CPU::ABS,  "LDY", 3, 4}},
         {0xBC, {&CPU::LDY, &CPU::ABSX, "LDY", 3, 4}},           
         {0xAA, {&CPU::TAX, &CPU::IMP,  "TAX", 1, 2}},
@@ -70,6 +70,13 @@ public:
         {0xC8, {&CPU::INY, &CPU::IMP,  "INY", 1, 2}},
         {0x00, {&CPU::BRK, &CPU::IMP,  "BRK", 1, 7}},
         {0x69, {&CPU::ADC, &CPU::IMM,  "ADC", 2, 2}},
+        {0x65, {&CPU::ADC, &CPU::ZPG,  "ADC", 2, 3}},
+        {0x75, {&CPU::ADC, &CPU::ZPGX, "ADC", 2, 4}},
+        {0x6D, {&CPU::ADC, &CPU::ABS,  "ADC", 3, 4}},
+        {0x7D, {&CPU::ADC, &CPU::ABSX, "ADC", 3, 4}},
+        {0x79, {&CPU::ADC, &CPU::ABSY, "ADC", 3, 4}},
+        {0x61, {&CPU::ADC, &CPU::INDX, "ADC", 2, 6}},
+        {0x71, {&CPU::ADC, &CPU::INDY, "ADC", 2, 5}},
         {0x29, {&CPU::AND, &CPU::IMM,  "AND", 2, 2}},
         {0x25, {&CPU::AND, &CPU::ZPG,  "AND", 2, 3}},
         {0x35, {&CPU::AND, &CPU::ZPGX, "AND", 2, 4}},
@@ -114,7 +121,10 @@ public:
         {0x90, {&CPU::BCC, &CPU::RLT,  "BCC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x30, {&CPU::BMI, &CPU::RLT,  "BMI", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x50, {&CPU::BVC, &CPU::RLT,  "BVC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0xB0, {&CPU::BCS, &CPU::RLT,  "BCS", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x09, {&CPU::ORA, &CPU::IMM,  "ORA", 2, 2}},
+        {0x05, {&CPU::ORA, &CPU::ZPG,  "ORA", 2, 3}},
+        {0x15, {&CPU::ORA, &CPU::ZPGX, "ORA", 2, 4}},
         {0x0D, {&CPU::ORA, &CPU::ABS,  "ORA", 3, 4}},
         {0x1D, {&CPU::ORA, &CPU::ABSX, "ORA", 3, 4}},
         {0x19, {&CPU::ORA, &CPU::ABSY, "ORA", 3, 4}},
@@ -163,14 +173,25 @@ public:
         {0xD8, {&CPU::CLD, &CPU::IMP,  "CLD", 1, 2}},
         {0x9A, {&CPU::TXS, &CPU::IMP,  "TXS", 1, 2}},
         {0x0A, {&CPU::ASL, &CPU::ACC,  "ASL", 1, 2}},
+        {0x06, {&CPU::ASL, &CPU::ZPG,  "ASL", 2, 5}},
+        {0x16, {&CPU::ASL, &CPU::ZPGX, "ASL", 2, 6}},
+        {0x0E, {&CPU::ASL, &CPU::ABS,  "ASL", 3, 6}},
+        {0x1E, {&CPU::ASL, &CPU::ABSX, "ASL", 3, 7}},
         {0x2A, {&CPU::ROL, &CPU::ACC,  "ROL", 1, 2}},
         {0x26, {&CPU::ROL, &CPU::ZPG,  "ROL", 2, 5}},
         {0x36, {&CPU::ROL, &CPU::ZPGX, "ROL", 2, 6}},
         {0x2E, {&CPU::ROL, &CPU::ABS,  "ROL", 3, 6}},
         {0x3E, {&CPU::ROL, &CPU::ABSX, "ROL", 3, 7}},
+        {0x6A, {&CPU::ROR, &CPU::ACC,  "ROR", 1, 2}},
+        {0x66, {&CPU::ROR, &CPU::ZPG,  "ROR", 2, 5}},
+        {0x76, {&CPU::ROR, &CPU::ZPGX, "ROR", 2, 6}},
+        {0x6E, {&CPU::ROR, &CPU::ABS,  "ROR", 3, 6}},
+        {0x7E, {&CPU::ROR, &CPU::ABSX, "ROR", 3, 7}},
         {0x40, {&CPU::RTI, &CPU::IMP,  "RTI", 1, 6}},
         {0xF8, {&CPU::SED, &CPU::IMP,  "SED", 1, 2}},
-        {0xB8, {&CPU::CLV, &CPU::IMP,  "CLV ", 1, 2}}
+        {0xB8, {&CPU::CLV, &CPU::IMP,  "CLV", 1, 2}},
+        {0x08, {&CPU::PHP, &CPU::IMP,  "PHP", 1, 3}},
+        {0x28, {&CPU::PLP, &CPU::IMP,  "PLP", 1, 4}}
     };
 
     bool Load(uint8_t* program, size_t size);
@@ -232,6 +253,7 @@ public:
     void BMI();
     void BCC();
     void BVC();
+    void BCS();
     void ORA();
     void EOR();
     void JMP();
@@ -251,8 +273,11 @@ public:
     void CLD();
     void NOP();
     void ROL();
+    void ROR();
     void RTI();
     void SED();
     void CLV();
+    void PHP();
+    void PLP();
 
 };
