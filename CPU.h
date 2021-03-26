@@ -5,10 +5,14 @@
 
 class NES;
 
+#define LOGGER false
+
 class CPU {
     NES* nes = nullptr;
     uint8_t* memory = nullptr;
     uint8_t controllerStatus = 0;
+
+    FILE* log;
 public:
     std::vector<uint8_t> PRGROM;
 
@@ -69,6 +73,7 @@ public:
         {0xAC, {&CPU::LDY, &CPU::ABS,  "LDY", 3, 4}},
         {0xBC, {&CPU::LDY, &CPU::ABSX, "LDY", 3, 4}},           
         {0xAA, {&CPU::TAX, &CPU::IMP,  "TAX", 1, 2}},
+        {0xBA, {&CPU::TSX, &CPU::IMP,  "TSX", 1, 2}},
         {0xA8, {&CPU::TAY, &CPU::IMP,  "TAY", 1, 2}},
         {0x98, {&CPU::TYA, &CPU::IMP,  "TYA", 1, 2}},
         {0xE8, {&CPU::INX, &CPU::IMP,  "INX", 1, 2}},
@@ -127,6 +132,7 @@ public:
         {0x30, {&CPU::BMI, &CPU::RLT,  "BMI", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x50, {&CPU::BVC, &CPU::RLT,  "BVC", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0xB0, {&CPU::BCS, &CPU::RLT,  "BCS", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
+        {0x70, {&CPU::BVS, &CPU::RLT,  "BVS", 2, 2}},           // cycles (+1 if branch succeeds, + 2 if to a new page)
         {0x09, {&CPU::ORA, &CPU::IMM,  "ORA", 2, 2}},
         {0x05, {&CPU::ORA, &CPU::ZPG,  "ORA", 2, 3}},
         {0x15, {&CPU::ORA, &CPU::ZPGX, "ORA", 2, 4}},
@@ -146,6 +152,7 @@ public:
         {0x4C, {&CPU::JMP, &CPU::ABS,  "JMP", 3, 3}},
         {0x6C, {&CPU::JMP, &CPU::IND,  "JMP", 3, 5}},
         {0x24, {&CPU::BIT, &CPU::ZPG,  "BIT", 2, 3}},
+        {0x2C, {&CPU::BIT, &CPU::ABS,  "BIT", 3, 4}},
         {0xE6, {&CPU::INC, &CPU::ZPG,  "INC", 2, 5}},
         {0xF6, {&CPU::INC, &CPU::ZPGX, "INC", 2, 6}},
         {0xEE, {&CPU::INC, &CPU::ABS,  "INC", 3, 6}},
@@ -235,6 +242,7 @@ public:
     void LDX();
     void LDY();
     void TAX();
+    void TSX();
     void TAY();
     void TYA();
     void INX();
@@ -256,6 +264,7 @@ public:
     void BNE();
     void BPL();
     void BMI();
+    void BVS();
     void BCC();
     void BVC();
     void BCS();

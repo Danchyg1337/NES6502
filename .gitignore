@@ -11,6 +11,7 @@
 *.sln.docstates
 *.nes
 *.6502
+CPUlog.txt
 HxD.exe
 *.6502.bak
 HxD.exe.lnk

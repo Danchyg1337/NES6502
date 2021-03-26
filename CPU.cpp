@@ -2,12 +2,16 @@
 
 #include "CPU.h"
 #include "NES6502.h"
+#include "Defines.h"
 
 bool CPU::Load(uint8_t* program, size_t size) {
     memory = new uint8_t[0x10000];
     PRGROM.resize(size);
     memcpy(PRGROM.data(), program, size);
     Reset();
+    if (LOGGER) {
+        fopen_s(&log, "CPUlog.txt", "w");
+    }
     return true;
 }
 
@@ -21,14 +25,16 @@ void CPU::NMI() {
     SetFlag(FLAGS::B, false);
     SetFlag(FLAGS::I, true);
     PC = (uint16_t(Read(0xFFFA + 1)) << 8) | uint16_t(Read(0xFFFA));
-    clockCycle = 8;
+    clockCycle += 8;
 }
 
 void CPU::Reset() {
     for (int t = 0; t <= 0xFFFF; t++) memory[t] = 0;
     SP = 0xFD;
     PC = (uint16_t(Read(0xFFFC + 1)) << 8) | uint16_t(Read(0xFFFC));
+    //PC = 0xC000;
     SR = FLAGS::IGNORED;
+    SR |= FLAGS::I;
     A = 0;
     X = 0;
     Y = 0;
@@ -41,12 +47,12 @@ void CPU::IRQ() {
     SetFlag(FLAGS::B, false);
     SetFlag(FLAGS::I, true);
     PC = (uint16_t(Read(0xFFFE + 1)) << 8) | uint16_t(Read(0xFFFE));
-    clockCycle = 7;
+    clockCycle += 7;
 }
 
 void CPU::StackPush16b(uint16_t value) {
-    StackPush8b(value);
     StackPush8b(value >> 8);
+    StackPush8b(value);
 }
 
 void CPU::StackPush8b(uint8_t value) {
@@ -56,7 +62,7 @@ void CPU::StackPush8b(uint8_t value) {
 
 uint16_t CPU::StackPop16b() {
     uint8_t MSB = StackPop8b();
-    return StackPop8b() | (uint16_t(MSB) << 8);
+    return (uint16_t(StackPop8b()) << 8) | uint16_t(MSB);
 }
 uint8_t CPU::StackPop8b() {
     SP++;
@@ -69,6 +75,46 @@ uint8_t CPU::Fetch() {
     uint8_t fetched = Read(PC);
     PC++;
     return fetched;
+}
+
+void CPU::Run() {
+    while (!(SR & FLAGS::B)) {
+        Call();
+    }
+}
+
+void CPU::Step() {
+    Call();
+}
+
+void CPU::Call() {
+    if (clockCycle > 0) {
+        clockCycle--;
+        return;
+    }
+    uint8_t opcode = Fetch();
+    if (LOGGER) {
+        if (log) fprintf_s(log, "%04X %s        A:%02X X:%02X Y:%02X SR:%02X SP:%02X PPU: %03i, %03i CYC:%i\n", PC - 1, instructions[opcode].name.data(), A, X, Y, SR, SP, nes->PPU2C02.horiLines, nes->PPU2C02.clockCycle, nes->clockCycle);
+    }
+    if (instructions.find(opcode) != instructions.end()) {
+        (this->*instructions[opcode].mode)(instructions[opcode].command);
+        clockCycle += instructions[opcode].cycles;
+    }
+    else
+        InvalidCommand(opcode);
+    SR |= FLAGS::IGNORED;
+}
+
+void CPU::InvalidCommand(uint8_t code) {
+    printf("Invalid command : %02X\n", code);
+    system("pause");
+}
+
+void CPU::SetFlag(FLAGS flag, bool set) {
+    if (set)
+        SR |= flag;
+    else
+        SR &= ~flag;
 }
 
 uint8_t& CPU::Read(uint16_t addr) {
@@ -159,43 +205,6 @@ void CPU::Write(uint16_t addr, uint8_t value) {
     }
 }
 
-void CPU::Run() {
-    while (!(SR & FLAGS::B)) {
-        Call();
-    }
-}
-
-void CPU::Step() {
-    Call();
-}
-
-void CPU::Call() {
-    if (clockCycle > 0) {
-        clockCycle--;
-        return;
-    }
-    uint8_t opcode = Fetch();
-    //printf("%04X %02X\n", PC - 1, opcode);
-    if (instructions.find(opcode) != instructions.end()) {
-        (this->*instructions[opcode].mode)(instructions[opcode].command);
-        clockCycle = instructions[opcode].cycles;
-    }
-    else
-        InvalidCommand(opcode);
-}
-
-void CPU::InvalidCommand(uint8_t code) {
-    printf("Invalid command : %02X\n", code);
-    system("pause");
-}
-
-void CPU::SetFlag(FLAGS flag, bool set) {
-    if (set)
-        SR = SR | flag;
-    else
-        SR = SR & ~flag;
-}
-
 //addressing modes 
 void CPU::IMP(void (CPU::* command)()) {
     (this->*command)();
@@ -247,7 +256,7 @@ void CPU::ABS(void (CPU::* command)()) {
 void CPU::ABSX(void (CPU::* command)()) {
     uint16_t LSB = Fetch();
     uint16_t MSB = Fetch();
-    value = ((MSB << 8) | LSB) + int8_t(X);
+    value = ((MSB << 8) | LSB) + X;
     isValueRegister = true;
     if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
     (this->*command)();
@@ -256,7 +265,7 @@ void CPU::ABSX(void (CPU::* command)()) {
 void CPU::ABSY(void (CPU::* command)()) {
     uint16_t LSB = Fetch();
     uint16_t MSB = Fetch();
-    value = ((MSB << 8) | LSB) + int8_t(Y);
+    value = ((MSB << 8) | LSB) + Y;
     isValueRegister = true;
     if ((value & 0xFF00) != (MSB << 8)) clockCycle++;
     (this->*command)();
@@ -265,7 +274,11 @@ void CPU::ABSY(void (CPU::* command)()) {
 void CPU::IND(void (CPU::* command)()) {
     uint16_t LSB = Fetch();
     uint16_t MSB = Fetch();
-    value = ((MSB << 8) | LSB);
+    uint16_t pos = ((MSB << 8) | LSB);
+    if (LSB == 0x00FF)
+        value = (Read(pos & 0xFF00) << 8) | Read(pos + 1);
+    else
+        value = (Read(pos + 1) << 8) | Read(pos);
     isValueRegister = true;
     (this->*command)();
 }
@@ -318,6 +331,12 @@ void CPU::TAX() {
     SetFlag(FLAGS::N, FLAGS::N & X);
 }
 
+void CPU::TSX() {
+    X = SP;
+    SetFlag(FLAGS::Z, X == 0);
+    SetFlag(FLAGS::N, FLAGS::N & X);
+}
+
 void CPU::TAY() {
     Y = A;
     SetFlag(FLAGS::Z, Y == 0);
@@ -342,30 +361,23 @@ void CPU::INY() {
     SetFlag(FLAGS::N, FLAGS::N & Y);
 }
 
-void CPU::BRK() {
-    StackPush16b(PC);
-    SetFlag(FLAGS::B, true);
-    SetFlag(FLAGS::I, true);
-    StackPush8b(SR);
-    SetFlag(FLAGS::B, false);
-    PC = (uint16_t(Read(0xFFFE + 1)) << 8) | uint16_t(Read(0xFFFE));
-}
-
 void CPU::ADC() {                                        //not compeled
-    uint8_t edge = std::min(A, (uint8_t)value);
+    if (isValueRegister) value = Read(value);
+    uint8_t Acopy = A;
     A = A + value + (SR & FLAGS::C);
-    SetFlag(FLAGS::C, A < edge);
+    SetFlag(FLAGS::C, A < Acopy);
     SetFlag(FLAGS::Z, A == 0);
-    SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);
+    SetFlag(FLAGS::V, (~(Acopy ^ value) & (A ^ Acopy)) & FLAGS::N);
     SetFlag(FLAGS::N, FLAGS::N & A);
 }
 
 void CPU::SBC() {                                        //not compeled
+    if (isValueRegister) value = Read(value);
     uint8_t Acopy = A;
     A = A - value - (1 - (SR & FLAGS::C));
     SetFlag(FLAGS::C, A > Acopy);
     SetFlag(FLAGS::Z, A == 0);
-    //SetFlag(FLAGS::V, (~(A ^ value) & (A ^ value)) & FLAGS::N);           //not valid, tbc
+    SetFlag(FLAGS::V, ((A ^ Acopy) & (A ^ value)) & FLAGS::N);
     SetFlag(FLAGS::N, FLAGS::N & A);
 }
 
@@ -440,37 +452,66 @@ void CPU::CPY() {
 
 void CPU::BEQ() {                                       
     if (!(SR & FLAGS::Z)) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::BNE() {                                       
     if (SR & FLAGS::Z) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::BPL() {                                       
     if (SR & FLAGS::N) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::BMI() {                                       
     if (!(SR & FLAGS::N)) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::BCC() {                                       
     if (SR & FLAGS::C) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::BVC() {                                       
     if (SR & FLAGS::V) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
+}
+
+void CPU::BVS() {
+    if (!(SR & FLAGS::V)) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
+    PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::BCS() {
     if (!(SR & FLAGS::C)) return;
+    clockCycle++;
+    uint16_t PCcopy = PC;
     PC += int8_t(value);
+    if ((PC & 0xFF00) != (PCcopy & 0xFF00)) clockCycle++;
 }
 
 void CPU::ORA() {
@@ -496,9 +537,9 @@ void CPU::JMP() {
 }
 
 void CPU::BIT() {
-    SetFlag(FLAGS::N, value & FLAGS::N);
-    SetFlag(FLAGS::V, value & FLAGS::V);
-    SetFlag(FLAGS::Z, value & A);
+    SetFlag(FLAGS::N, Read(value) & FLAGS::N);
+    SetFlag(FLAGS::V, Read(value) & FLAGS::V);
+    SetFlag(FLAGS::Z, uint8_t(Read(value) & A) == 0);
 }
 
 void CPU::INC() {
@@ -536,6 +577,8 @@ void CPU::PHA() {
 
 void CPU::PLA() {
     A = StackPop8b();
+    SetFlag(FLAGS::Z, A == 0);
+    SetFlag(FLAGS::N, A & FLAGS::N);
 }
 
 void CPU::TXS() {
@@ -580,7 +623,7 @@ void CPU::ASL() {
     uint8_t* ptr = &A;
     if (isValueRegister) 
         ptr = &Read(value);      
-    SetFlag(FLAGS::C, *ptr & FLAGS::C);
+    SetFlag(FLAGS::C, *ptr & FLAGS::N);
     *ptr <<= 1;
     SetFlag(FLAGS::Z, *ptr == 0);
     SetFlag(FLAGS::N, *ptr & FLAGS::N);
@@ -591,7 +634,7 @@ void CPU::SEC() {
 }
 
 void CPU::SEI() {
-    SetFlag(FLAGS::I, false);
+    SetFlag(FLAGS::I, true);
 }
 
 void CPU::CLD() {
@@ -606,13 +649,24 @@ void CPU::CLV() {
     SetFlag(FLAGS::V, false);
 }
 
+void CPU::BRK() {
+    StackPush16b(PC);
+    SetFlag(FLAGS::B, true);
+    StackPush8b(SR);
+    SetFlag(FLAGS::B, false);
+    PC = (uint16_t(Read(0xFFFE + 1)) << 8) | uint16_t(Read(0xFFFE));
+}
+
 void CPU::RTI() {
     SR = StackPop8b();
+    SR &= FLAGS::B;
     PC = StackPop16b();
 }
 
 void CPU::PHP() {
-    StackPush8b(SR);
+    StackPush8b(SR | FLAGS::B | FLAGS::IGNORED);
+    SetFlag(FLAGS::B, false);
+    SetFlag(FLAGS::IGNORED, false);
 }
 
 void CPU::PLP() {
