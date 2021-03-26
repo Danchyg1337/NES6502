@@ -21,6 +21,7 @@ void PPU::Step() {
 		if (horiLines > 260) {
 			horiLines = -1;
 			toRender = VRAM;
+			BanktoRender = PPUCTRL & FLAGS::B4;
 		}
 	}
 	if (horiLines == 241 && clockCycle == 1) {

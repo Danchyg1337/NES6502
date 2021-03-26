@@ -374,10 +374,11 @@ void CPU::ADC() {                                        //not compeled
 void CPU::SBC() {                                        //not compeled
     if (isValueRegister) value = Read(value);
     uint8_t Acopy = A;
-    A = A - value - (1 - (SR & FLAGS::C));
+    value ^= 0x00FF;
+    A = A + value + (SR & FLAGS::C);
     SetFlag(FLAGS::C, A > Acopy);
     SetFlag(FLAGS::Z, A == 0);
-    SetFlag(FLAGS::V, ((A ^ Acopy) & (A ^ value)) & FLAGS::N);
+    SetFlag(FLAGS::V, (A ^ Acopy) & (A ^ value) & FLAGS::N);
     SetFlag(FLAGS::N, FLAGS::N & A);
 }
 
@@ -412,16 +413,11 @@ void CPU::CLC() {
 }
 
 void CPU::CMP() {
-    uint8_t res, val = value;
-    if (isValueRegister) {
-        res = A - Read(value);
-        val = Read(value);
-    }
-    else
-        res = A - value;
-    SetFlag(FLAGS::C, A >= val);
-    SetFlag(FLAGS::Z, A == val);
-    SetFlag(FLAGS::N, FLAGS::N & res);
+    if (isValueRegister) 
+        value = Read(value);
+    SetFlag(FLAGS::C, A >= value);
+    SetFlag(FLAGS::Z, A == value);
+    SetFlag(FLAGS::N, FLAGS::N & (A - value));
 }
 
 void CPU::CPX() {
@@ -582,7 +578,7 @@ void CPU::PLA() {
 }
 
 void CPU::TXS() {
-    StackPush8b(X);
+    SP = X;
 }
 
 void CPU::ROL() {
@@ -659,7 +655,7 @@ void CPU::BRK() {
 
 void CPU::RTI() {
     SR = StackPop8b();
-    SR &= FLAGS::B;
+    SR &= ~FLAGS::B;
     PC = StackPop16b();
 }
 

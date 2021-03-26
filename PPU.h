@@ -21,6 +21,7 @@ public:
 	std::vector<uint8_t> CHRROM;
 	std::vector<uint8_t> VRAM;
 	std::vector<uint8_t> toRender;			//ready copy of VRAM
+	bool BanktoRender;			//ready copy of VRAM
 	std::vector<uint8_t> paletteTable;
 
 	uint8_t PPUCTRL;	//2000

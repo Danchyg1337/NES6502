@@ -82,7 +82,7 @@ GLuint CreateTexture(uint16_t Width, uint16_t Height) {
     return texture;
 }
 
-void RenderBackground(std::vector<uint8_t> data, GLuint chrTex, GLuint dstFramebuffer, Shader& backgroundShader, GLuint vao) {
+void RenderBackground(std::vector<uint8_t> data, bool secondBank, GLuint chrTex, GLuint dstFramebuffer, Shader& backgroundShader, GLuint vao) {
     if (chrTex == -1) return;
     
     glBindFramebuffer(GL_FRAMEBUFFER, dstFramebuffer);
@@ -104,6 +104,7 @@ void RenderBackground(std::vector<uint8_t> data, GLuint chrTex, GLuint dstFrameb
     glUniformMatrix3fv(backgroundShader.SetUniform("palette"), 1, GL_FALSE, palette);
     glUniform1i(backgroundShader.SetUniform("chrTex"), 0);
     glUniform1uiv(backgroundShader.SetUniform("data"), data.size() / 4, (GLuint*)data.data());
+    glUniform1i(backgroundShader.SetUniform("bank"), secondBank);
     glViewport(0, 0, 8 * 32, 8 * 30);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -314,7 +315,7 @@ int BasicInitGui (NES *nes_cpu) {
         PassInputs(nes_cpu);
 
         ConnectTexture(secondFramebuffer, backgroundTexture);
-        RenderBackground(nes_cpu->PPU2C02.toRender, chrTex, secondFramebuffer, backgroundShader, squareVAO);
+        RenderBackground(nes_cpu->PPU2C02.toRender, nes_cpu->PPU2C02.BanktoRender, chrTex, secondFramebuffer, backgroundShader, squareVAO);
         
         
         int display_w, display_h;

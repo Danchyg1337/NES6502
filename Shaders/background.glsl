@@ -19,6 +19,7 @@ uniform uint tilesWidth;
 uniform uint tilesHeight;
 uniform sampler2D chrTex;
 uniform uint data[256];
+uniform bool bank;
 
 
 void main () {
@@ -44,6 +45,8 @@ void main () {
 	uint value = data[(screenW * relPosY + relPosX) / 4U];
 
 	value = (value >> a[int32indexX]) & 0xFFU;
+
+	if(bank) value += 256U;
 
 	Frag_color = texture(chrTex, vec2((value % tilesWidth + fractX) / tilesWidth, (value / tilesWidth + fractY) / tilesHeight));
 	//Frag_color = vec4(vec3(float (int32indexX) / 4., .5, .5 ), 1);
