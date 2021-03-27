@@ -275,10 +275,11 @@ void CPU::IND(void (CPU::* command)()) {
     uint16_t LSB = Fetch();
     uint16_t MSB = Fetch();
     uint16_t pos = ((MSB << 8) | LSB);
+    value = Read(pos);
     if (LSB == 0x00FF)
-        value = (Read(pos & 0xFF00) << 8) | Read(pos + 1);
+        value |= (Read(pos & 0xFF00) << 8);
     else
-        value = (Read(pos + 1) << 8) | Read(pos);
+        value |= (Read(pos + 1) << 8);
     isValueRegister = true;
     (this->*command)();
 }
@@ -287,7 +288,7 @@ void CPU::INDX(void (CPU::* command)()) {
     uint8_t Xval = Fetch();
     uint8_t pos = Xval + int8_t(X);
     value = Read(pos);
-    value |= uint16_t(Read(pos + 1)) << 8;
+    value |= uint16_t(Read(uint8_t(pos + 1))) << 8;
     isValueRegister = true;
     (this->*command)();
 }
@@ -295,7 +296,7 @@ void CPU::INDX(void (CPU::* command)()) {
 void CPU::INDY(void (CPU::* command)()) {
     uint8_t Yval = Fetch();
     value = Read(Yval);
-    uint16_t MSB = uint16_t(Read(Yval + 1)) << 8;
+    uint16_t MSB = uint16_t(Read(uint8_t(Yval + 1))) << 8;
     value |= MSB;
     value += Y;
     isValueRegister = true;
@@ -373,13 +374,13 @@ void CPU::ADC() {                                        //not compeled
 
 void CPU::SBC() {                                        //not compeled
     if (isValueRegister) value = Read(value);
-    uint8_t Acopy = A;
     value ^= 0x00FF;
-    A = A + value + (SR & FLAGS::C);
-    SetFlag(FLAGS::C, A > Acopy);
-    SetFlag(FLAGS::Z, A == 0);
-    SetFlag(FLAGS::V, (A ^ Acopy) & (A ^ value) & FLAGS::N);
-    SetFlag(FLAGS::N, FLAGS::N & A);
+    uint16_t res = uint16_t(A) + value + uint16_t(SR & FLAGS::C);
+    SetFlag(FLAGS::C, res & 0xFF00);
+    SetFlag(FLAGS::Z, (res & 0x00FF) == 0);
+    SetFlag(FLAGS::V, (res ^ A) & (res ^ value) & FLAGS::N);
+    SetFlag(FLAGS::N, FLAGS::N & res);
+    A = res;
 }
 
 void CPU::AND() {
@@ -400,12 +401,12 @@ void CPU::STY() {
 }
 
 void CPU::JSR() {
-    StackPush16b(PC);
+    StackPush16b(PC - 1);
     PC = value;
 }
 
 void CPU::RTS() {
-    PC = StackPop16b();
+    PC = StackPop16b() + 1;
 }
 
 void CPU::CLC() {
