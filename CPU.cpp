@@ -409,10 +409,6 @@ void CPU::RTS() {
     PC = StackPop16b() + 1;
 }
 
-void CPU::CLC() {
-    SetFlag(FLAGS::C, false);
-}
-
 void CPU::CMP() {
     if (isValueRegister) 
         value = Read(value);
@@ -646,6 +642,10 @@ void CPU::CLV() {
     SetFlag(FLAGS::V, false);
 }
 
+void CPU::CLC() {
+    SetFlag(FLAGS::C, false);
+}
+
 void CPU::BRK() {
     StackPush16b(PC);
     SetFlag(FLAGS::B, true);
@@ -673,5 +673,3 @@ void CPU::PLP() {
 void CPU::NOP() {
     return;
 }
-
-
