@@ -4,7 +4,6 @@
 #include "NES6502.h"
 
 bool PPU::Load(uint8_t* pattern, size_t size) {
-	paletteTable.resize(0xFF, 0);
 	VRAM.resize(2048, 0);
 	toRender.resize(2048, 0);
 	CHRROM.resize(size);
