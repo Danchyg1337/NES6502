@@ -16,6 +16,7 @@ class NES
 public:
     CPU CPU6502;
     PPU PPU2C02;
+    std::vector<uint8_t> DMAOAM;
     std::vector<uint8_t> program;
     bool running = false;
 

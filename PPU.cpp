@@ -4,6 +4,7 @@
 #include "NES6502.h"
 
 bool PPU::Load(uint8_t* pattern, size_t size) {
+	OAM.resize(0x0100, 0);
 	paletteRAM.resize(0x20, 0);
 	VRAM.resize(0x0800, 0);
 	toRender.resize(0x0800, 0);
@@ -15,6 +16,7 @@ bool PPU::Load(uint8_t* pattern, size_t size) {
 
 void PPU::Step() {
 	if (horiLines == -1 && clockCycle == 1) PPUSTATUS &= ~FLAGS::B7;
+	if (horiLines == 0 && clockCycle == 0) clockCycle = 1;
 	clockCycle++;
 	if (clockCycle > 340) {
 		clockCycle = 0;
@@ -23,7 +25,9 @@ void PPU::Step() {
 			horiLines = -1;
 			toRender = VRAM;
 			ATtoRender = std::vector<uint8_t>(toRender.begin() + 0x03C0, toRender.begin() + 0x03C0 + 64);
-			BanktoRender = PPUCTRL & FLAGS::B4;
+			mode8x16	   = PPUCTRL & FLAGS::B5;
+			BanktoRenderBG = PPUCTRL & FLAGS::B4;
+			BanktoRenderFG = PPUCTRL & FLAGS::B3;
 			GetPalette();
 		}
 	}
@@ -116,15 +120,20 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 		VRAMaddr += (PPUCTRL & FLAGS::B2 ? 32 : 1);
 		break;
 	case 0x4014:
-		OAMDMA = value;
+		OAM = nes->DMAOAM;
 		break;
 	}
 }
 
 void PPU::GetPalette() {
 	bgColor = paletteTable[ReadData(0x3F00) % 64];
-	palettes.bgPalettte0 = { paletteTable[ReadData(0x3F00 + 1) % 64],  paletteTable[ReadData(0x3F00 + 2) % 64],  paletteTable[ReadData(0x3F00 + 3) % 64] };
-	palettes.bgPalettte1 = { paletteTable[ReadData(0x3F00 + 5) % 64],  paletteTable[ReadData(0x3F00 + 6) % 64],  paletteTable[ReadData(0x3F00 + 7) % 64] };
-	palettes.bgPalettte2 = { paletteTable[ReadData(0x3F00 + 9) % 64],  paletteTable[ReadData(0x3F00 + 10) % 64], paletteTable[ReadData(0x3F00 + 11) % 64] };
-	palettes.bgPalettte3 = { paletteTable[ReadData(0x3F00 + 13) % 64], paletteTable[ReadData(0x3F00 + 14) % 64], paletteTable[ReadData(0x3F00 + 15) % 64] };
+	bgPalettes.palettte0 = { paletteTable[ReadData(0x3F00 + 1) % 64],  paletteTable[ReadData(0x3F00 + 2) % 64],  paletteTable[ReadData(0x3F00 + 3) % 64] };
+	bgPalettes.palettte1 = { paletteTable[ReadData(0x3F00 + 5) % 64],  paletteTable[ReadData(0x3F00 + 6) % 64],  paletteTable[ReadData(0x3F00 + 7) % 64] };
+	bgPalettes.palettte2 = { paletteTable[ReadData(0x3F00 + 9) % 64],  paletteTable[ReadData(0x3F00 + 10) % 64], paletteTable[ReadData(0x3F00 + 11) % 64] };
+	bgPalettes.palettte3 = { paletteTable[ReadData(0x3F00 + 13) % 64], paletteTable[ReadData(0x3F00 + 14) % 64], paletteTable[ReadData(0x3F00 + 15) % 64] };
+
+	fgPalettes.palettte0 = { paletteTable[ReadData(0x3F10 + 1) % 64],  paletteTable[ReadData(0x3F10 + 2) % 64],  paletteTable[ReadData(0x3F10 + 3) % 64] };
+	fgPalettes.palettte1 = { paletteTable[ReadData(0x3F10 + 5) % 64],  paletteTable[ReadData(0x3F10 + 6) % 64],  paletteTable[ReadData(0x3F10 + 7) % 64] };
+	fgPalettes.palettte2 = { paletteTable[ReadData(0x3F10 + 9) % 64],  paletteTable[ReadData(0x3F10 + 10) % 64], paletteTable[ReadData(0x3F10 + 11) % 64] };
+	fgPalettes.palettte3 = { paletteTable[ReadData(0x3F10 + 13) % 64], paletteTable[ReadData(0x3F10 + 14) % 64], paletteTable[ReadData(0x3F10 + 15) % 64] };
 }

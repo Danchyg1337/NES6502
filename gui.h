@@ -100,10 +100,50 @@ void RenderBackground(PPU* ppu, GLuint chrTex, GLuint dstFramebuffer, Shader& ba
     glUniform1i(backgroundShader.SetUniform("chrTex"), 0);
     glUniform1uiv(backgroundShader.SetUniform("data"), ppu->toRender.size() / 4, (GLuint*)ppu->toRender.data());
     glUniform1uiv(backgroundShader.SetUniform("colors"), ppu->ATtoRender.size(), (GLuint*)ppu->ATtoRender.data());
-    glUniform1i(backgroundShader.SetUniform("bank"), ppu->BanktoRender);
+    glUniform1i(backgroundShader.SetUniform("bank"), ppu->BanktoRenderBG);
     glUniform3f(backgroundShader.SetUniform("bgColor"), ppu->bgColor.r, ppu->bgColor.g, ppu->bgColor.b);
 
-    glUniform3fv(backgroundShader.SetUniform("palettes"), 12, (float*)&ppu->palettes);
+    glUniform3fv(backgroundShader.SetUniform("palettes"), 12, (float*)&ppu->bgPalettes);
+    glViewport(0, 0, 8 * 32, 8 * 30);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void RenderForeground(PPU* ppu, uint8_t Y, uint8_t byte1, uint8_t byte2, uint8_t X, GLuint chrTex, GLuint bgTex, GLuint dstFramebuffer, Shader& foregroundShader, GLuint vao) {
+    if (bgTex == -1) return;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFramebuffer);
+    glBindVertexArray(vao);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, chrTex);
+
+    foregroundShader.Use();
+    int width, height;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+    glUniform1i(foregroundShader.SetUniform("chrTex"), 0);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, bgTex);
+    glUniform1i(foregroundShader.SetUniform("bgTex"), 1);
+
+    glUniform1ui(foregroundShader.SetUniform("tilesWidth"), width / 8);
+    glUniform1ui(foregroundShader.SetUniform("tilesHeight"), height / 8);
+    glUniform1ui(foregroundShader.SetUniform("spriteX"), X);
+    glUniform1ui(foregroundShader.SetUniform("spriteY"), Y);
+    glUniform1ui(foregroundShader.SetUniform("spriteTile"), ppu->mode8x16 ? byte1 & ~1 : byte1);
+    glUniform1i(foregroundShader.SetUniform("bank"), ppu->mode8x16 ? byte1 & 1 : ppu->BanktoRenderFG);
+    glUniform1i(foregroundShader.SetUniform("mode8x16"), ppu->mode8x16);
+    glUniform1i(foregroundShader.SetUniform("tilePalette"), byte2 & 0x3);                             
+    glUniform1i(foregroundShader.SetUniform("depth"), byte2 & 0x20);                             
+    glUniform1i(foregroundShader.SetUniform("flipH"), byte2 & 0x40);                             
+    glUniform1i(foregroundShader.SetUniform("flipV"), byte2 & 0x80);                             
+
+    glUniform3fv(foregroundShader.SetUniform("palettes"), 12, (float*)&ppu->fgPalettes);
     glViewport(0, 0, 8 * 32, 8 * 30);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -207,7 +247,7 @@ void PassInputs(NES* nes) {
         nes->CPU6502.controllerValue |= 8;
     if (keys[GLFW_KEY_ENTER])
         nes->CPU6502.controllerValue |= 16;
-    if (keys[GLFW_KEY_LEFT_SHIFT])
+    if (keys[GLFW_KEY_C])
         nes->CPU6502.controllerValue |= 32;
     if (keys[GLFW_KEY_Z])
         nes->CPU6502.controllerValue |= 64;
@@ -289,22 +329,25 @@ int BasicInitGui (NES *nes_cpu) {
     bool show_instruction_window = false;
     bool show_zpage = false;
     bool show_vram = false;
+    bool show_OAM = false;
 
     ImVec4 clear_color = ImVec4 (0.45f, 0.55f, 0.60f, 1.00f);
 
     Shader chrDumpShader("Shaders/chrdump.glsl");
     Shader backgroundShader("Shaders/background.glsl");
+    Shader foregroundShader("Shaders/foreground.glsl");
     Shader screenShader("Shaders/textureToScreen.glsl");
     uint16_t tileWidth = 20, tileHeight = 26;
     GLuint chrTex = CreateTexture(8 * tileWidth, 8 * tileHeight);
     GLuint backgroundTexture = CreateTexture(8 * 32, 8 * 30);
+    GLuint foregroundTexture = CreateTexture(8 * 32, 8 * 30);
     
     GLuint secondFramebuffer = CreateFramebuffer();
-    ConnectTexture(secondFramebuffer, chrTex);
 
     GLuint squareVAO, squareVBO;
     GetSquareVAOnVBO(squareVAO, squareVBO);
 
+    ConnectTexture(secondFramebuffer, chrTex);
     CHRdump(&nes_cpu->PPU2C02, chrDumpShader, secondFramebuffer, squareVAO);
 
     auto instructionsMap = instructions_dump(&nes_cpu->CPU6502);
@@ -315,7 +358,19 @@ int BasicInitGui (NES *nes_cpu) {
 
         ConnectTexture(secondFramebuffer, backgroundTexture);
         RenderBackground(&nes_cpu->PPU2C02, chrTex, secondFramebuffer, backgroundShader, squareVAO);
-        
+
+        ConnectTexture(secondFramebuffer, foregroundTexture);
+
+        GLuint back = backgroundTexture;
+        for (int16_t spriteIndex = 252; spriteIndex >= 0; spriteIndex -= 4) {
+
+            uint16_t y = nes_cpu->PPU2C02.OAM[spriteIndex];
+            uint16_t byte1 = nes_cpu->PPU2C02.OAM[spriteIndex + 1];
+            uint16_t byte2 = nes_cpu->PPU2C02.OAM[spriteIndex + 2];
+            uint16_t x = nes_cpu->PPU2C02.OAM[spriteIndex + 3];
+            RenderForeground(&nes_cpu->PPU2C02, y, byte1, byte2, x, chrTex, back, secondFramebuffer, foregroundShader, squareVAO);
+            back = foregroundTexture;
+        }
         
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -327,7 +382,7 @@ int BasicInitGui (NES *nes_cpu) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glBindVertexArray(squareVAO);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, backgroundTexture);
+        glBindTexture(GL_TEXTURE_2D, foregroundTexture);
         screenShader.Use();
         glUniform1i(screenShader.SetUniform("InputTexture"), 0);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -385,6 +440,7 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::Checkbox(("SHOW INSTRUCTION LIST"), &show_instruction_window);
             ImGui::Checkbox(("SHOW Z PAGE"), &show_zpage);
             ImGui::Checkbox(("SHOW VRAM"), &show_vram);
+            ImGui::Checkbox(("SHOW OAM"), &show_OAM);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO ().Framerate, ImGui::GetIO ().Framerate);
 
@@ -421,6 +477,25 @@ int BasicInitGui (NES *nes_cpu) {
                 for (uint16_t column = 0; column < 32; column++) {
                     std::string val(3, ' ');
                     sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->PPU2C02.VRAM[32 * row + column]);
+                    line += val.substr(0, 2) + " ";
+                }
+                ImGui::Text(line.c_str());
+            }
+
+            ImGui::End();
+        }
+
+        if (show_OAM)
+        {
+            ImGui::Begin("OAM", &show_OAM);
+
+            for (uint16_t row = 0x00; row < 16; row++) {
+                std::string line(4, ' ');
+                sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
+                line[3] = ' ';
+                for (uint16_t column = 0; column < 16; column++) {
+                    std::string val(3, ' ');
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->PPU2C02.OAM[16 * row + column]);
                     line += val.substr(0, 2) + " ";
                 }
                 ImGui::Text(line.c_str());

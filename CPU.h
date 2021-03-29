@@ -16,6 +16,8 @@ class CPU {
 public:
     std::vector<uint8_t> PRGROM;
 
+    long long unsigned int totalClock = 0;
+
     uint16_t clockCycle = 0;
     uint16_t value = 0;
     bool isValueRegister = false;
@@ -202,6 +204,7 @@ public:
         {0x40, {&CPU::RTI, &CPU::IMP,  "RTI", 1, 6}},
         {0xF8, {&CPU::SED, &CPU::IMP,  "SED", 1, 2}},
         {0xB8, {&CPU::CLV, &CPU::IMP,  "CLV", 1, 2}},
+        {0x58, {&CPU::CLI, &CPU::IMP,  "CLI", 1, 2}},
         {0x08, {&CPU::PHP, &CPU::IMP,  "PHP", 1, 3}},
         {0x28, {&CPU::PLP, &CPU::IMP,  "PLP", 1, 4}}
     };
@@ -291,6 +294,7 @@ public:
     void RTI();
     void SED();
     void CLV();
+    void CLI();
     void PHP();
     void PLP();
 

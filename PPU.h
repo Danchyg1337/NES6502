@@ -26,12 +26,15 @@ public:
 
 	bool frameIsReady = false;
 
+	std::vector<uint8_t> OAM;
 	std::vector<uint8_t> CHRROM;
 	std::vector<uint8_t> paletteRAM;
 	std::vector<uint8_t> VRAM;
 	std::vector<uint8_t> toRender;			//ready copy of VRAM
 	std::vector<uint8_t> ATtoRender;		//ready copy of AT
-	bool BanktoRender;						
+	bool BanktoRenderBG;						
+	bool BanktoRenderFG;						
+	bool mode8x16;						
 	
 	struct RGB {
 		float r;
@@ -48,13 +51,14 @@ public:
 	RGB bgColor;
 
 	struct Palettes {
-		Palette bgPalettte0;
-		Palette bgPalettte1;
-		Palette bgPalettte2;
-		Palette bgPalettte3;
+		Palette palettte0;
+		Palette palettte1;
+		Palette palettte2;
+		Palette palettte3;
 	};
 
-	Palettes palettes;
+	Palettes bgPalettes;
+	Palettes fgPalettes;
 
 	std::unordered_map<uint8_t, RGB> paletteTable = {
 		{0,  {84, 84, 84}},	   {1, {0, 30, 116}},	  {2, {8, 16, 144}},     {3, {48, 0, 136}},     {4, {68, 0, 100}},     {5, {92, 0, 48}},      {6, {84, 4, 0}},       {7,  {60, 24, 0}},     {8, {32, 42, 0}},      {9, {8, 58, 0}},       {10, {0, 64, 0}},      {11, {0, 60, 0}},      {12, {0, 50, 60}},     {13, {0, 0, 0}},       {14, {0, 0, 0}}, {15, {0, 0, 0}},

@@ -53,7 +53,7 @@ void main () {
 	vec4 tileColor = texture(chrTex, vec2((value % tilesWidth + fractX) / tilesWidth, (value / tilesWidth + fractY) / tilesHeight));
 
 	float colorsPosX = 2 * texPos.x;
-	float colorsPosY = 8 * texPos.y;
+	float colorsPosY = 7.5 * texPos.y;
 
 	uint colorsRelPosX = uint(colorsPosX);
 	uint colorsRelPosY = uint(colorsPosY);

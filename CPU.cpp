@@ -38,6 +38,7 @@ void CPU::Reset() {
     A = 0;
     X = 0;
     Y = 0;
+    clockCycle += 7;
 }
 
 void CPU::IRQ() {
@@ -88,17 +89,18 @@ void CPU::Step() {
 }
 
 void CPU::Call() {
+    totalClock++;
     if (clockCycle > 0) {
         clockCycle--;
         return;
     }
     uint8_t opcode = Fetch();
     if (LOGGER) {
-        if (log) fprintf_s(log, "%04X %s        A:%02X X:%02X Y:%02X SR:%02X SP:%02X PPU: %03i, %03i CYC:%i\n", PC - 1, instructions[opcode].name.data(), A, X, Y, SR, SP, nes->PPU2C02.horiLines, nes->PPU2C02.clockCycle, nes->clockCycle);
+        if (log) fprintf_s(log, "%04X %s        A:%02X X:%02X Y:%02X SR:%02X SP:%02X PPU: %03i, %03i CYC:%i\n", PC - 1, instructions[opcode].name.data(), A, X, Y, SR, SP, nes->PPU2C02.horiLines, nes->PPU2C02.clockCycle, totalClock);
     }
     if (instructions.find(opcode) != instructions.end()) {
         (this->*instructions[opcode].mode)(instructions[opcode].command);
-        clockCycle += instructions[opcode].cycles;
+        clockCycle += instructions[opcode].cycles - 1;
     }
     else
         InvalidCommand(opcode);
@@ -182,9 +184,13 @@ void CPU::Write(uint16_t addr, uint8_t value) {
     else if (addr >= 0x2008 && addr < 0x4000) {
         Write((addr - 0x2000) % 0x0008, value);
     }
-    //APU Registers
+    //APU and I/O Registers
     else if (addr >= 0x4000 && addr < 0x4020) {
-        if (addr == 0x4016) {
+        if (addr == 0x4014) {
+            memcpy(nes->DMAOAM.data(), &memory[uint16_t(value) << 8], 0x0100);
+            nes->WritePPU(addr, value);
+        }
+        else if (addr == 0x4016) {
             controllerStrobe = value & 0x1;
             if (controllerStrobe) controllerIndex = 7;
         }
@@ -642,6 +648,10 @@ void CPU::CLV() {
     SetFlag(FLAGS::V, false);
 }
 
+void CPU::CLI() {
+    SetFlag(FLAGS::I, false);
+}
+
 void CPU::CLC() {
     SetFlag(FLAGS::C, false);
 }
@@ -668,6 +678,7 @@ void CPU::PHP() {
 
 void CPU::PLP() {
     SR = StackPop8b();
+    SR &= ~FLAGS::B;
 }
 
 void CPU::NOP() {

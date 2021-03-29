@@ -33,6 +33,7 @@ bool NES::LoadRom(std::string filename, bool rawcode)
         CPU6502.Load(program.data(), program.size());
     CPU6502.ConnectToNes(this);
     PPU2C02.ConnectToNes(this);
+    DMAOAM.resize(0x0100);
     return true;
 }
 
@@ -44,14 +45,14 @@ void NES::Reset() {
 
 void NES::Step() {
     PPU2C02.Step();
-        if (!(clockCycle % 3)) CPU6502.Step();
+    if (!(clockCycle % 3)) CPU6502.Step();
     clockCycle++;
 }
 
 void NES::Run() {
     while (true) {
         if (running) {
-            std::this_thread::sleep_for(std::chrono::nanoseconds(delay));
+            //std::this_thread::sleep_for(std::chrono::nanoseconds(delay));
             Step();
         }
     }
@@ -69,7 +70,7 @@ uint8_t& NES::ReadPPU(uint16_t addr) {
 
 void NES::WritePPU(uint16_t addr, uint8_t value) {
     //printf("PPUWRITE %04X, %02X\n", addr, value);
-    if (addr >= 0x2000 && addr < 0x2008) {
+    if ((addr >= 0x2000 && addr < 0x2008) || addr == 0x4014) {
         PPU2C02.Write(addr, value);
     }
 }

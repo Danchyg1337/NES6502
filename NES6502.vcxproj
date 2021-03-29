@@ -226,6 +226,7 @@
   <ItemGroup>
     <None Include="Shaders\background.glsl" />
     <None Include="Shaders\chrdump.glsl" />
+    <None Include="Shaders\foreground.glsl" />
     <None Include="Shaders\textureToScreen.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

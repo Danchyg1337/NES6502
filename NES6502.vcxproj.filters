@@ -109,5 +109,8 @@
     <None Include="Shaders\textureToScreen.glsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="Shaders\foreground.glsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
