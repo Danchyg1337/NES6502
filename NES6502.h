@@ -28,6 +28,7 @@ public:
     bool LoadRom(std::string filename, bool rawcode = false);
     void Reset();
     void Step();
+    void Frame();
     void Run();
     uint8_t& ReadPPU(uint16_t addr);
     void WritePPU(uint16_t addr, uint8_t value);

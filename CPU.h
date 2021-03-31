@@ -55,6 +55,9 @@ public:
         uint8_t cycles;
     };
 
+    //turned out this is faster to simply store instructions opcodes inside of static array instead of unordered_map. 
+    Command instrFast[256];
+
     std::unordered_map<uint8_t, Command> instructions = {
         {0xA9, {&CPU::LDA, &CPU::IMM,  "LDA", 2, 2}},
         {0xA5, {&CPU::LDA, &CPU::ZPG,  "LDA", 2, 3}},

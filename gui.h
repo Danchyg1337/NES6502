@@ -98,7 +98,10 @@ void RenderBackground(PPU* ppu, GLuint chrTex, GLuint dstFramebuffer, Shader& ba
     glUniform1ui(backgroundShader.SetUniform("tilesWidth"), width / 8);
     glUniform1ui(backgroundShader.SetUniform("tilesHeight"), height / 8);
     glUniform1i(backgroundShader.SetUniform("chrTex"), 0);
-    glUniform1uiv(backgroundShader.SetUniform("data"), ppu->toRender.size() / 4, (GLuint*)ppu->toRender.data());
+    glUniform1uiv(backgroundShader.SetUniform("data"), ppu->VRAM.size() / 4, (GLuint*)ppu->VRAM.data());
+    glUniform1ui(backgroundShader.SetUniform("offsetX"), ppu->scrollX);
+    glUniform1ui(backgroundShader.SetUniform("offsetY"), ppu->scrollY);
+    glUniform1ui(backgroundShader.SetUniform("nametableNum"), ppu->nametableBank);
     glUniform1uiv(backgroundShader.SetUniform("colors"), ppu->ATtoRender.size(), (GLuint*)ppu->ATtoRender.data());
     glUniform1i(backgroundShader.SetUniform("bank"), ppu->BanktoRenderBG);
     glUniform3f(backgroundShader.SetUniform("bgColor"), ppu->bgColor.r, ppu->bgColor.g, ppu->bgColor.b);
@@ -138,10 +141,12 @@ void RenderForeground(PPU* ppu, uint8_t Y, uint8_t byte1, uint8_t byte2, uint8_t
     glUniform1ui(foregroundShader.SetUniform("spriteTile"), ppu->mode8x16 ? byte1 & ~1 : byte1);
     glUniform1i(foregroundShader.SetUniform("bank"), ppu->mode8x16 ? byte1 & 1 : ppu->BanktoRenderFG);
     glUniform1i(foregroundShader.SetUniform("mode8x16"), ppu->mode8x16);
-    glUniform1i(foregroundShader.SetUniform("tilePalette"), byte2 & 0x3);                             
+    glUniform1ui(foregroundShader.SetUniform("tilePalette"), byte2 & 0x3);                             
     glUniform1i(foregroundShader.SetUniform("depth"), byte2 & 0x20);                             
+    glUniform1i(foregroundShader.SetUniform("behindBG"), byte2 & 0x20);                  
     glUniform1i(foregroundShader.SetUniform("flipH"), byte2 & 0x40);                             
-    glUniform1i(foregroundShader.SetUniform("flipV"), byte2 & 0x80);                             
+    glUniform1i(foregroundShader.SetUniform("flipV"), byte2 & 0x80);                  
+    glUniform3f(foregroundShader.SetUniform("bgColor"), ppu->bgColor.r, ppu->bgColor.g, ppu->bgColor.b);
 
     glUniform3fv(foregroundShader.SetUniform("palettes"), 12, (float*)&ppu->fgPalettes);
     glViewport(0, 0, 8 * 32, 8 * 30);
@@ -287,7 +292,7 @@ int BasicInitGui (NES *nes_cpu) {
     if (window == NULL)
         return 1;
     glfwMakeContextCurrent (window);
-    glfwSwapInterval (1); // Enable vsync
+    glfwSwapInterval (0); // Enable vsync
 
     glfwSetKeyCallback(window, KeyCallback);
 
@@ -329,6 +334,7 @@ int BasicInitGui (NES *nes_cpu) {
     bool show_instruction_window = false;
     bool show_zpage = false;
     bool show_vram = false;
+    bool show_palettte = false;
     bool show_OAM = false;
 
     ImVec4 clear_color = ImVec4 (0.45f, 0.55f, 0.60f, 1.00f);
@@ -350,10 +356,11 @@ int BasicInitGui (NES *nes_cpu) {
     ConnectTexture(secondFramebuffer, chrTex);
     CHRdump(&nes_cpu->PPU2C02, chrDumpShader, secondFramebuffer, squareVAO);
 
-    auto instructionsMap = instructions_dump(&nes_cpu->CPU6502);
+    //auto instructionsMap = instructions_dump(&nes_cpu->CPU6502);
 
     while (!glfwWindowShouldClose (window))
     {   
+        nes_cpu->Run();
         PassInputs(nes_cpu);
 
         ConnectTexture(secondFramebuffer, backgroundTexture);
@@ -440,6 +447,7 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::Checkbox(("SHOW INSTRUCTION LIST"), &show_instruction_window);
             ImGui::Checkbox(("SHOW Z PAGE"), &show_zpage);
             ImGui::Checkbox(("SHOW VRAM"), &show_vram);
+            ImGui::Checkbox(("SHOW PALETTES"), &show_palettte);
             ImGui::Checkbox(("SHOW OAM"), &show_OAM);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO ().Framerate, ImGui::GetIO ().Framerate);
@@ -447,24 +455,24 @@ int BasicInitGui (NES *nes_cpu) {
             ImGui::End();
         }
 
-        if (show_instruction_window)
-        {
-            ImGui::Begin ("Instructions", &show_instruction_window);
-            int16_t newLines = 10;
-            for (int16_t lineAddr = -newLines; lineAddr < newLines; lineAddr++) {
-                auto it = instructionsMap.find(nes_cpu->CPU6502.PC);
-                std::advance(it, lineAddr);                                                         //kod GOVNO, exception drop.
-                if (it == instructionsMap.end()) {
-                    newLines++;
-                    continue;
-                }
-                if (it->first == nes_cpu->CPU6502.PC)
-                    ImGui::TextColored({1, 0, 1, 1}, "%04X %s", it->first, it->second.c_str());
-                else 
-                    ImGui::Text ("%04X %s", it->first, it->second.c_str());
-            }
-            ImGui::End ();
-        }
+        //if (show_instruction_window)
+        //{
+        //    ImGui::Begin ("Instructions", &show_instruction_window);
+        //    int16_t newLines = 10;
+        //    for (int16_t lineAddr = -newLines; lineAddr < newLines; lineAddr++) {
+        //        auto it = instructionsMap.find(nes_cpu->CPU6502.PC);
+        //        std::advance(it, lineAddr);                                                         //kod GOVNO, exception drop.
+        //        if (it == instructionsMap.end()) {
+        //            newLines++;
+        //            continue;
+        //        }
+        //        if (it->first == nes_cpu->CPU6502.PC)
+        //            ImGui::TextColored({1, 0, 1, 1}, "%04X %s", it->first, it->second.c_str());
+        //        else 
+        //            ImGui::Text ("%04X %s", it->first, it->second.c_str());
+        //    }
+        //    ImGui::End ();
+        //}
 
         if (show_vram)
         {
@@ -482,6 +490,75 @@ int BasicInitGui (NES *nes_cpu) {
                 ImGui::Text(line.c_str());
             }
 
+            ImGui::Text("Table 2");
+            for (uint16_t row = 0x00; row < 30; row++) {
+                std::string line(4, ' ');
+                sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
+                line[3] = ' ';
+                for (uint16_t column = 0; column < 32; column++) {
+                    std::string val(3, ' ');
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->PPU2C02.VRAM[0x0400 + 32 * row + column]);
+                    line += val.substr(0, 2) + " ";
+                }
+                ImGui::Text(line.c_str());
+            }
+
+            ImGui::End();
+        }
+
+        if (show_palettte)
+        {
+            ImGui::Begin("PALETTES", &show_palettte);
+
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte0.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte0.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte0.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte0.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte0.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte0.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte0.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte0.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte0.c3.b/ 255, 1), "*");
+                                                                                                                                                                                 
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte1.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte1.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte1.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte1.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte1.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte1.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte1.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte1.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte1.c3.b/ 255, 1), "*");
+                                                                                                                                                                                 
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte2.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte2.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte2.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte2.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte2.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte2.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte2.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte2.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte2.c3.b/ 255, 1), "*");
+                                                                                                                                                                                 
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte3.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte3.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte3.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte3.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte3.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte3.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palettte3.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palettte3.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palettte3.c3.b/ 255, 1), "*");
+                                                                                                                                                                                 
+            ImGui::Text("Sprites");                                                                                                                                              
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte0.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte0.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte0.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                  
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte0.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte0.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte0.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte0.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte0.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte0.c3.b/ 255, 1), "*");
+                                                                                                                                                                                 
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte1.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte1.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte1.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte1.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte1.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte1.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte1.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte1.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte1.c3.b/ 255, 1), "*");
+                                                                                                                                                                                 
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte2.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte2.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte2.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte2.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte2.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte2.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                  
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte2.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte2.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte2.c3.b/ 255, 1), "*");
+                                                                                                                                                                                
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte3.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte3.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte3.c1.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte3.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte3.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte3.c2.b/ 255, 1), "*");
+            ImGui::SameLine();                                                                                                                                                   
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palettte3.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palettte3.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palettte3.c3.b/ 255, 1), "*");
+
             ImGui::End();
         }
 
@@ -489,17 +566,22 @@ int BasicInitGui (NES *nes_cpu) {
         {
             ImGui::Begin("OAM", &show_OAM);
 
-            for (uint16_t row = 0x00; row < 16; row++) {
+            for (uint16_t row = 0x00; row < 16 * 4; row++) {
                 std::string line(4, ' ');
                 sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
                 line[3] = ' ';
-                for (uint16_t column = 0; column < 16; column++) {
+                for (uint16_t column = 0; column < 4; column++) {
                     std::string val(3, ' ');
-                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->PPU2C02.OAM[16 * row + column]);
+                    sprintf_s(const_cast<char*>(val.data()), val.size(), "%02X", nes_cpu->PPU2C02.OAM[4 * row + column]);
                     line += val.substr(0, 2) + " ";
                 }
                 ImGui::Text(line.c_str());
+                ImGui::SameLine();
+                uint8_t byte = nes_cpu->PPU2C02.OAM[4 * row + 2] & 0x3;
+                ImGui::Text("%i", byte);
             }
+
+
 
             ImGui::End();
         }

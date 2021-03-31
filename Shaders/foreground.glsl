@@ -14,6 +14,7 @@ void main(){
 
 layout(location = 0) out vec4 Frag_color;
 in vec2 texPos;
+uniform vec3 bgColor;
 uniform vec3 palettes[12];
 uniform uint tilesWidth;
 uniform uint tilesHeight;
@@ -27,6 +28,7 @@ uniform bool bank;
 uniform bool depth;
 uniform bool flipH;
 uniform bool flipV;
+uniform bool behindBG;
 uniform bool mode8x16;
 
 
@@ -47,6 +49,8 @@ void main () {
 
 
 	Frag_color = texture(bgTex, texPos);
+	if(Frag_color.rgb != bgColor && behindBG) return;
+
 	if(onX && onY){
 		if(bool(onY2) && mode8x16){
 			if(flipV)
@@ -58,8 +62,10 @@ void main () {
 		float tileX = (value % tilesWidth + abs((int(flipH) * 8 - (spritePosX - spriteX)) / 8)) / tilesWidth;
 		float tileY = (value / tilesWidth + abs((int(flipV) * 8 - (spritePosY - spriteY)) / 8)) / tilesHeight;
 		vec4 tileColor = texture(chrTex, vec2(tileX, tileY));
+
 		if(tileColor.r == 1.) Frag_color = vec4(palettes[tilePalette * 3U] / 255, 1);
 		else if(tileColor.g == 1.) Frag_color = vec4(palettes[tilePalette * 3U + 1U] / 255, 1);
 		else if(tileColor.b == 1.) Frag_color = vec4(palettes[tilePalette * 3U + 2U] / 255, 1);
+		//else Frag_color = vec4(bgColor / 255, 1);
 	}
 }

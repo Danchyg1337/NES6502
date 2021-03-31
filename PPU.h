@@ -13,6 +13,10 @@ public:
 	int16_t horiLines = 0;
 
 	uint8_t fetched;
+	uint8_t data;
+
+	uint8_t scrollX = 0;
+	uint8_t scrollY = 0;
 
 	enum MIRRORING : uint8_t{
 		HORIZONTAL,
@@ -22,6 +26,7 @@ public:
 	uint8_t mirroringMode = MIRRORING::HORIZONTAL;
 
 	uint16_t VRAMaddr = 0x0;
+	uint16_t baseBankAddr = 0x0;
 	bool addrLatch = false;
 
 	bool frameIsReady = false;
@@ -29,12 +34,13 @@ public:
 	std::vector<uint8_t> OAM;
 	std::vector<uint8_t> CHRROM;
 	std::vector<uint8_t> paletteRAM;
+	std::vector<uint8_t> patternTable;
 	std::vector<uint8_t> VRAM;
-	std::vector<uint8_t> toRender;			//ready copy of VRAM
 	std::vector<uint8_t> ATtoRender;		//ready copy of AT
 	bool BanktoRenderBG;						
 	bool BanktoRenderFG;						
-	bool mode8x16;						
+	bool mode8x16;		
+	uint8_t nametableBank = 0;
 	
 	struct RGB {
 		float r;

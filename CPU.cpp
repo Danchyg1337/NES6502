@@ -12,6 +12,13 @@ bool CPU::Load(uint8_t* program, size_t size) {
     if (LOGGER) {
         fopen_s(&log, "CPUlog.txt", "w");
     }
+
+    //copying whole array at start of program just not to recreate premade structure of key/value into a static array.
+    for (int t = 0; t < 256; t++) {
+        instrFast[t] = instructions[t];
+    }
+
+
     return true;
 }
 
@@ -68,7 +75,6 @@ uint16_t CPU::StackPop16b() {
 uint8_t CPU::StackPop8b() {
     SP++;
     uint8_t res = Read(stackBottom + SP);
-    Write(stackBottom + SP, 0);
     return res;
 }
 
@@ -98,9 +104,9 @@ void CPU::Call() {
     if (LOGGER) {
         if (log) fprintf_s(log, "%04X %s        A:%02X X:%02X Y:%02X SR:%02X SP:%02X PPU: %03i, %03i CYC:%i\n", PC - 1, instructions[opcode].name.data(), A, X, Y, SR, SP, nes->PPU2C02.horiLines, nes->PPU2C02.clockCycle, totalClock);
     }
-    if (instructions.find(opcode) != instructions.end()) {
-        (this->*instructions[opcode].mode)(instructions[opcode].command);
-        clockCycle += instructions[opcode].cycles - 1;
+    if (instrFast[opcode].mode != nullptr) {
+        (this->*instrFast[opcode].mode)(instrFast[opcode].command);
+        clockCycle += instrFast[opcode].cycles - 1;
     }
     else
         InvalidCommand(opcode);

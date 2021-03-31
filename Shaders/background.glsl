@@ -18,18 +18,33 @@ uniform vec3 bgColor;
 uniform vec3 palettes[12];
 uniform uint tilesWidth;
 uniform uint tilesHeight;
+uniform uint offsetX;
+uniform uint offsetY;
 uniform sampler2D chrTex;
-uniform uint data[256];
+uniform uint data[512];
 uniform uint colors[36];
 uniform bool bank;
+uniform uint nametableNum;
 
 
 void main () {
 	uint screenW = 32U;
 	uint screenH = 30U;
 
-	float PosX = screenW * texPos.x;
-	float PosY = screenH * texPos.y;
+	vec2 offs[4];
+	offs[0] = vec2(0, 0);
+	offs[1] = vec2(0, 1.065);
+	offs[2] = vec2(0, 1.065);
+	offs[3] = vec2(1, 1);
+
+	vec2 offXY = offs[nametableNum] + (vec2(offsetX / float(screenW * 8U), offsetY / (float(screenH) * 7.5)) + texPos);
+
+
+
+	if(offXY.y > 2.) offXY.y -= 2.13;
+
+	float PosX = screenW * offXY.x;
+	float PosY = screenH * offXY.y;
 
 	uint relPosX = uint(PosX);
 	uint relPosY = uint(PosY);
@@ -52,8 +67,8 @@ void main () {
 
 	vec4 tileColor = texture(chrTex, vec2((value % tilesWidth + fractX) / tilesWidth, (value / tilesWidth + fractY) / tilesHeight));
 
-	float colorsPosX = 2 * texPos.x;
-	float colorsPosY = 7.5 * texPos.y;
+	float colorsPosX = 2 * offXY.x;
+	float colorsPosY = 7.5 * offXY.y;
 
 	uint colorsRelPosX = uint(colorsPosX);
 	uint colorsRelPosY = uint(colorsPosY);

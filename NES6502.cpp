@@ -28,6 +28,7 @@ bool NES::LoadRom(std::string filename, bool rawcode)
         size_t PRGsize = 16384 * PRGnum, CHRsize = 8192 * CHRnum;
         CPU6502.Load(program.data() + 16, PRGsize);
         PPU2C02.Load(program.data() + 16 + PRGsize, CHRsize);
+        PPU2C02.mirroringMode = flag6 & 1;
     }
     else
         CPU6502.Load(program.data(), program.size());
@@ -49,12 +50,17 @@ void NES::Step() {
     clockCycle++;
 }
 
+void NES::Frame() {
+    do {
+        Step();
+    } while (!PPU2C02.frameIsReady);
+}
+
+
 void NES::Run() {
-    while (true) {
-        if (running) {
-            //std::this_thread::sleep_for(std::chrono::nanoseconds(delay));
-            Step();
-        }
+    if (running) {
+        //std::this_thread::sleep_for(std::chrono::nanoseconds(delay));
+        Frame();
     }
 }
 
