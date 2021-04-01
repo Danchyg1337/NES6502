@@ -36,7 +36,8 @@ public:
 	std::vector<uint8_t> paletteRAM;
 	std::vector<uint8_t> patternTable;
 	std::vector<uint8_t> VRAM;
-	std::vector<uint8_t> ATtoRender;		//ready copy of AT
+	std::vector<uint8_t> VRAMtoRender;
+	std::vector<uint8_t> ATtoRender;		
 	bool BanktoRenderBG;						
 	bool BanktoRenderFG;						
 	bool mode8x16;		

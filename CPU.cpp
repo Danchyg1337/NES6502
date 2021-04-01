@@ -376,12 +376,12 @@ void CPU::INY() {
 
 void CPU::ADC() {                                        //not compeled
     if (isValueRegister) value = Read(value);
-    uint8_t Acopy = A;
-    A = A + value + (SR & FLAGS::C);
-    SetFlag(FLAGS::C, A < Acopy);
-    SetFlag(FLAGS::Z, A == 0);
-    SetFlag(FLAGS::V, (~(Acopy ^ value) & (A ^ Acopy)) & FLAGS::N);
-    SetFlag(FLAGS::N, FLAGS::N & A);
+    uint16_t res = A + value + (SR & FLAGS::C);
+    SetFlag(FLAGS::C, res & 0xFF00);
+    SetFlag(FLAGS::Z, (res & 0x00FF) == 0);
+    SetFlag(FLAGS::V, (~(A ^ value) & (res ^ A)) & FLAGS::N);
+    SetFlag(FLAGS::N, FLAGS::N & res);
+    A = res;
 }
 
 void CPU::SBC() {                                        //not compeled

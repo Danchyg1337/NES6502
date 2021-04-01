@@ -26,6 +26,7 @@ uniform uint colors[36];
 uniform bool bank;
 uniform uint nametableNum;
 
+uniform uint mirroring;
 
 void main () {
 	uint screenW = 32U;
@@ -33,15 +34,28 @@ void main () {
 
 	vec2 offs[4];
 	offs[0] = vec2(0, 0);
-	offs[1] = vec2(0, 1.065);
-	offs[2] = vec2(0, 1.065);
+	offs[1] = vec2(1, 0);
+	offs[2] = vec2(0, 1);
 	offs[3] = vec2(1, 1);
 
-	vec2 offXY = offs[nametableNum] + (vec2(offsetX / float(screenW * 8U), offsetY / (float(screenH) * 7.5)) + texPos);
+	vec2 offXY = offs[nametableNum] + (vec2(offsetX / (float(screenW) * 8.), offsetY / (float(screenH) * 8)) + texPos);
 
+	if(mirroring == 0U){
+		if(offXY.x > 1.)
+			offXY.x -= 1.;
+	}
 
+	if(mirroring == 1U){
+		if(offXY.y > 1.){
+			offXY.y -= 1.;
+		}
+		if(offXY.x > 1.){
+			offXY.x -= 1.;
+			offXY.y += 1.;
+		}
+	}
+	if(offXY.y > 2.) offXY.y -= 2.;
 
-	if(offXY.y > 2.) offXY.y -= 2.13;
 
 	float PosX = screenW * offXY.x;
 	float PosY = screenH * offXY.y;

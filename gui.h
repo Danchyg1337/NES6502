@@ -98,10 +98,11 @@ void RenderBackground(PPU* ppu, GLuint chrTex, GLuint dstFramebuffer, Shader& ba
     glUniform1ui(backgroundShader.SetUniform("tilesWidth"), width / 8);
     glUniform1ui(backgroundShader.SetUniform("tilesHeight"), height / 8);
     glUniform1i(backgroundShader.SetUniform("chrTex"), 0);
-    glUniform1uiv(backgroundShader.SetUniform("data"), ppu->VRAM.size() / 4, (GLuint*)ppu->VRAM.data());
+    glUniform1uiv(backgroundShader.SetUniform("data"), ppu->VRAMtoRender.size() / 4, (GLuint*)ppu->VRAMtoRender.data());
     glUniform1ui(backgroundShader.SetUniform("offsetX"), ppu->scrollX);
     glUniform1ui(backgroundShader.SetUniform("offsetY"), ppu->scrollY);
     glUniform1ui(backgroundShader.SetUniform("nametableNum"), ppu->nametableBank);
+    glUniform1ui(backgroundShader.SetUniform("mirroring"), ppu->mirroringMode);
     glUniform1uiv(backgroundShader.SetUniform("colors"), ppu->ATtoRender.size(), (GLuint*)ppu->ATtoRender.data());
     glUniform1i(backgroundShader.SetUniform("bank"), ppu->BanktoRenderBG);
     glUniform3f(backgroundShader.SetUniform("bgColor"), ppu->bgColor.r, ppu->bgColor.g, ppu->bgColor.b);

@@ -19,12 +19,13 @@ void PPU::Step() {
 	frameIsReady = false;
 	if (horiLines == -1 && clockCycle == 1) PPUSTATUS &= ~FLAGS::B7;
 	if (horiLines == 0 && clockCycle == 0) clockCycle = 1;
-	clockCycle++;
 	if (clockCycle > 340) {
 		clockCycle = 0;
 		horiLines++;
 		if (horiLines > 260) {
 			horiLines = -1;
+			VRAMtoRender = std::vector<uint8_t>(VRAM.begin(), VRAM.begin() + 0x03C0);
+			VRAMtoRender.insert(VRAMtoRender.end(), VRAM.begin() + 0x0400, VRAM.begin() + 0x0400 + 0x03C0);
 			ATtoRender = std::vector<uint8_t>(VRAM.begin() + 0x03C0, VRAM.begin() + 0x03C0 + 64);
 			ATtoRender.insert(ATtoRender.end(), VRAM.begin() + 0x0400 + 0x03C0, VRAM.begin() + 0x0400 +0x03C0 + 64);
 			mode8x16	   = PPUCTRL & FLAGS::B5;
@@ -32,7 +33,6 @@ void PPU::Step() {
 			BanktoRenderFG = PPUCTRL & FLAGS::B3;
 			bgColor = paletteTable[0];
 			GetPalette();
-
 			frameIsReady = true;
 		}
 	}
@@ -40,6 +40,10 @@ void PPU::Step() {
 		PPUSTATUS |= FLAGS::B7;
 		if (PPUCTRL & FLAGS::B7) nes->SendNMI();
 	}
+
+
+
+	clockCycle++;
 }
 
 void PPU::Reset() {
@@ -123,7 +127,7 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 	case 0x2000:
 		PPUCTRL = value;
 		nametableBank = PPUCTRL & 0x03;
-		// printf("BANK %i\n", nametableBank);
+		//printf("BANK %i\n", nametableBank);
 		baseBankAddr = nametableBank * 0x0400;
 		break;
 	case 0x2001:
