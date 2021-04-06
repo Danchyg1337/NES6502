@@ -16,12 +16,149 @@ bool PPU::Load(uint8_t* pattern, size_t size) {
 }
 
 void PPU::Step() {
+
+	if (currentPixelX >= 8) {
+		currentPixelX = 0;
+		currentTileX++;
+	}
+
+	if (currentPixelY >= 8) {
+		currentPixelY = 0;
+		currentTileY++;
+	}
+
 	frameIsReady = false;
-	if (horiLines == -1 && clockCycle == 1) PPUSTATUS &= ~FLAGS::B7;
+	if (horiLines == -1 && clockCycle == 1) {
+		PPUSTATUS &= ~FLAGS::B7;
+		PPUSTATUS &= ~FLAGS::B6;
+	}
 	if (horiLines == 0 && clockCycle == 0) clockCycle = 1;
+	if (clockCycle <= 256 && horiLines < 240 && horiLines != -1) {
+
+		uint16_t currentTileY = horiLines / 8;
+		uint16_t currentTileX = clockCycle / 8;
+		uint16_t currentPixelY = horiLines % 8;
+		uint16_t currentPixelX = clockCycle % 8;
+		uint16_t scrTileX = scrollX / 8;
+		uint16_t scrTileY = scrollY / 8;
+		uint16_t scrPixelX = scrollX % 8;
+		uint16_t scrPixelY = scrollY % 8;
+		int32_t pxlPos = horiLines * 768 + clockCycle * 3 - scrPixelX * 3 - scrPixelY * 768;
+		if(pxlPos < 0) pxlPos = 0;
+
+		int16_t finalX = scrTileX + currentTileX;
+		int16_t finalY = scrTileY + currentTileY;
+	
+		switch (mirroringMode)
+		{
+		case MIRRORING::HORIZONTAL:
+			if (finalX >= 32) {
+				finalX -= 32;
+			}
+			if (finalY >= 30) {
+				finalY -= 30;
+				if (nametableBank == 0)
+					finalX += 0x0400;
+				else
+					finalX -= 0x0400;
+			}
+			finalX += nametableBank * 0x0200;
+			break;
+		case MIRRORING::VERTICAL:
+			if (finalY >= 30) {
+				finalY -= 30;
+			}
+			if (finalX >= 32) {
+				finalX -= 32;
+				if (nametableBank == 0)
+					finalX += 0x0400;
+				else
+					finalX -= 0x0400;
+			}
+			finalX += nametableBank * 0x0400;
+			break;
+		}
+
+		uint16_t finalPos = finalY * 32 + finalX;
+		uint16_t chrPos = VRAM[finalPos];
+		if (BanktoRenderBG) chrPos += 256;
+		chrPos *= 16;
+
+		uint8_t LSB = patternTable[chrPos + currentPixelY];
+		uint8_t MSB = patternTable[chrPos + currentPixelY + 8];
+
+
+		uint8_t l = LSB >> (7 - currentPixelX) & 1;
+		uint8_t h = MSB >> (7 - currentPixelX) & 1;
+		uint8_t colorN = ((h << 1) | l) & 0x3;
+
+
+		uint8_t tile4Colors = ATtoRender[currentTileY / 4 * 8 + currentTileX / 4];
+
+		bool right = currentTileX / 2 % 2;
+		bool bottom = currentTileY / 2 % 2;
+
+		uint8_t tileColor = (tile4Colors >> (bottom * 4) >> (right * 2)) & 0x3;
+
+		Palette pal;
+
+		switch (tileColor) {
+		case 0:
+			pal = bgPalettes.palette0;
+			break;
+		case 1:
+			pal = bgPalettes.palette1;
+			break;
+		case 2:
+			pal = bgPalettes.palette2;
+			break;
+		case 3:
+			pal = bgPalettes.palette3;
+			break;
+		}
+
+
+		switch (colorN)
+		{
+		case 1:
+			pixls[pxlPos] =		pal.c1.r;
+			pixls[pxlPos + 1] = pal.c1.g;
+			pixls[pxlPos + 2] = pal.c1.b;
+			break;
+		case 2:
+			pixls[pxlPos] =		pal.c2.r;
+			pixls[pxlPos + 1] = pal.c2.g;
+			pixls[pxlPos + 2] = pal.c2.b;
+			break;
+		case 3:
+			pixls[pxlPos] =		pal.c3.r;
+			pixls[pxlPos + 1] = pal.c3.g;
+			pixls[pxlPos + 2] = pal.c3.b;
+			break;
+		default:
+			pixls[pxlPos] =		bgColor.r;
+			pixls[pxlPos + 1] = bgColor.g;
+			pixls[pxlPos + 2] = bgColor.b;
+			break;
+		}
+
+
+		uint16_t y = OAM[0];
+		uint16_t x = OAM[3];
+
+		if ((PPUMASK & FLAGS::B3) && (PPUMASK & FLAGS::B4) && !(PPUSTATUS & FLAGS::B6) && (horiLines >= y - 1 && horiLines <= y + 7) && (clockCycle >= x && clockCycle <= x + 8)) {
+			if (pixls[pxlPos] == bgColor.r && pixls[pxlPos + 1] == bgColor.g && pixls[pxlPos + 2] == bgColor.b) {
+				PPUSTATUS |= FLAGS::B6;
+				//printf("X: %i, Y: %i, T: %i\n", clockCycle, horiLines, OAM[1]);
+			}
+			//printf("IN\n");
+		}
+	}
 	if (clockCycle > 340) {
 		clockCycle = 0;
+		currentTileX = 0;
 		horiLines++;
+		currentPixelY++;
 		if (horiLines > 260) {
 			horiLines = -1;
 			VRAMtoRender = std::vector<uint8_t>(VRAM.begin(), VRAM.begin() + 0x03C0);
@@ -34,6 +171,8 @@ void PPU::Step() {
 			bgColor = paletteTable[0];
 			GetPalette();
 			frameIsReady = true;
+			
+			currentPixelX = currentPixelY = currentTileX = currentTileY = 0;
 		}
 	}
 	if (horiLines == 241 && clockCycle == 1) {
@@ -41,7 +180,7 @@ void PPU::Step() {
 		if (PPUCTRL & FLAGS::B7) nes->SendNMI();
 	}
 
-
+	currentPixelX++;
 
 	clockCycle++;
 }
@@ -150,6 +289,7 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 			scrollX = value;
 			addrLatch = true;
 		}
+		//printf("X %i, Y%i\n", scrollX, scrollY);
 		break;
 	case 0x2006:
 		if (addrLatch) {
@@ -173,13 +313,13 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 
 void PPU::GetPalette() {
 	bgColor = paletteTable[ReadData(0x3F00) % 64];
-	bgPalettes.palettte0 = { paletteTable[ReadData(0x3F00 + 1) % 64],  paletteTable[ReadData(0x3F00 + 2) % 64],  paletteTable[ReadData(0x3F00 + 3) % 64] };
-	bgPalettes.palettte1 = { paletteTable[ReadData(0x3F00 + 5) % 64],  paletteTable[ReadData(0x3F00 + 6) % 64],  paletteTable[ReadData(0x3F00 + 7) % 64] };
-	bgPalettes.palettte2 = { paletteTable[ReadData(0x3F00 + 9) % 64],  paletteTable[ReadData(0x3F00 + 10) % 64], paletteTable[ReadData(0x3F00 + 11) % 64] };
-	bgPalettes.palettte3 = { paletteTable[ReadData(0x3F00 + 13) % 64], paletteTable[ReadData(0x3F00 + 14) % 64], paletteTable[ReadData(0x3F00 + 15) % 64] };
+	bgPalettes.palette0 = { paletteTable[ReadData(0x3F00 + 1) % 64],  paletteTable[ReadData(0x3F00 + 2) % 64],  paletteTable[ReadData(0x3F00 + 3) % 64] };
+	bgPalettes.palette1 = { paletteTable[ReadData(0x3F00 + 5) % 64],  paletteTable[ReadData(0x3F00 + 6) % 64],  paletteTable[ReadData(0x3F00 + 7) % 64] };
+	bgPalettes.palette2 = { paletteTable[ReadData(0x3F00 + 9) % 64],  paletteTable[ReadData(0x3F00 + 10) % 64], paletteTable[ReadData(0x3F00 + 11) % 64] };
+	bgPalettes.palette3 = { paletteTable[ReadData(0x3F00 + 13) % 64], paletteTable[ReadData(0x3F00 + 14) % 64], paletteTable[ReadData(0x3F00 + 15) % 64] };
 
-	fgPalettes.palettte0 = { paletteTable[ReadData(0x3F10 + 1) ],  paletteTable[ReadData(0x3F10 + 2) ],  paletteTable[ReadData(0x3F10 + 3) ] };
-	fgPalettes.palettte1 = { paletteTable[ReadData(0x3F10 + 5) ],  paletteTable[ReadData(0x3F10 + 6) ],  paletteTable[ReadData(0x3F10 + 7) ] };
-	fgPalettes.palettte2 = { paletteTable[ReadData(0x3F10 + 9) ],  paletteTable[ReadData(0x3F10 + 10)], paletteTable[ReadData(0x3F10 + 11) ] };
-	fgPalettes.palettte3 = { paletteTable[ReadData(0x3F10 + 13) ], paletteTable[ReadData(0x3F10 + 14) ], paletteTable[ReadData(0x3F10 + 15) ] };
+	fgPalettes.palette0 = { paletteTable[ReadData(0x3F10 + 1) ],  paletteTable[ReadData(0x3F10 + 2) ],  paletteTable[ReadData(0x3F10 + 3) ] };
+	fgPalettes.palette1 = { paletteTable[ReadData(0x3F10 + 5) ],  paletteTable[ReadData(0x3F10 + 6) ],  paletteTable[ReadData(0x3F10 + 7) ] };
+	fgPalettes.palette2 = { paletteTable[ReadData(0x3F10 + 9) ],  paletteTable[ReadData(0x3F10 + 10)], paletteTable[ReadData(0x3F10 + 11) ] };
+	fgPalettes.palette3 = { paletteTable[ReadData(0x3F10 + 13) ], paletteTable[ReadData(0x3F10 + 14) ], paletteTable[ReadData(0x3F10 + 15) ] };
 }

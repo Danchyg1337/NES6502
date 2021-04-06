@@ -18,10 +18,18 @@ public:
 	uint8_t scrollX = 0;
 	uint8_t scrollY = 0;
 
+	uint8_t currentTileX = 0;
+	uint8_t currentTileY = 0;
+	uint8_t currentPixelX = 0;
+	uint8_t currentPixelY = 0;
+
 	enum MIRRORING : uint8_t{
 		HORIZONTAL,
 		VERTICAL
 	};
+
+
+	uint8_t* pixls = new uint8_t[187320];			//test
 
 	uint8_t mirroringMode = MIRRORING::HORIZONTAL;
 
@@ -58,10 +66,10 @@ public:
 	RGB bgColor;
 
 	struct Palettes {
-		Palette palettte0;
-		Palette palettte1;
-		Palette palettte2;
-		Palette palettte3;
+		Palette palette0;
+		Palette palette1;
+		Palette palette2;
+		Palette palette3;
 	};
 
 	Palettes bgPalettes;
