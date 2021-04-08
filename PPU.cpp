@@ -54,12 +54,11 @@ uint16_t PPU::GetCurrentScreenTileAddr() {
 
 uint8_t PPU::GetCurrentTilePalette(uint16_t tilePos) {
 
-	bool right = ((tilePos >> 2) & 0x07) & 1;
-	bool bottom = ((tilePos >> 4) & 0x38) & 1;
+	bool right =  (tilePos >> 1) & 1;
+	bool bottom = (tilePos >> 6) & 1;
 
 	uint8_t tile4Colors = ReadData(0x23C0 | (tilePos & 0x0C00) | ((tilePos >> 4) & 0x38) | ((tilePos >> 2) & 0x07));
-	uint8_t tileColor = (tile4Colors >> (bottom * 4 + right * 2)) & 0x3;
-	return tileColor;
+	return (tile4Colors >> (bottom * 4 + right * 2)) & 0x3;
 }
 
 void PPU::GetCurrentChrTile() {

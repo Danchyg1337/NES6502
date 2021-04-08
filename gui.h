@@ -482,7 +482,7 @@ int BasicInitGui (NES *nes_cpu) {
         {
             ImGui::Begin("VRAM", &show_vram);
             
-            for (uint16_t row = 0x00; row < 30; row++) {
+            for (uint16_t row = 0x00; row < 32; row++) {
                 std::string line(4, ' ');
                 sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
                 line[3] = ' ';
@@ -495,7 +495,7 @@ int BasicInitGui (NES *nes_cpu) {
             }
 
             ImGui::Text("Table 2");
-            for (uint16_t row = 0x00; row < 30; row++) {
+            for (uint16_t row = 0x00; row < 32; row++) {
                 std::string line(4, ' ');
                 sprintf_s(const_cast<char*>(line.data()), line.size(), "$%02X", row);
                 line[3] = ' ';
