@@ -144,7 +144,6 @@ void PPU::Step() {
 			mode8x16	   = PPUCTRL & FLAGS::B5;
 			BanktoRenderBG = PPUCTRL & FLAGS::B4;
 			BanktoRenderFG = PPUCTRL & FLAGS::B3;
-			bgColor = paletteTable[0];
 			GetPalette();
 			frameIsReady = true;
 			
@@ -230,10 +229,8 @@ void PPU::WriteData(uint16_t addr, uint8_t value) {
 		VRAM[mirrAddr] = value;
 	}	
 	if (addr >= 0x3F00 && addr <= 0x3FFF) {
-		if (addr % 4 == 0)
-			paletteRAM[0] = value;
-		else
-			paletteRAM[(addr - 0x3F00) % 0x20] = value;
+		if (addr % 4 == 0 && addr >= 0x3F10) addr -= 16;
+		paletteRAM[(addr - 0x3F00) % 0x20] = value;
 	}
 }
 
@@ -292,14 +289,14 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 }
 
 void PPU::GetPalette() {
-	bgColor = paletteTable[ReadData(0x3F00) % 64];
-	bgPalettes[0] = { paletteTable[ReadData(0x3F00 + 1) % 64],  paletteTable[ReadData(0x3F00 + 2) % 64],  paletteTable[ReadData(0x3F00 + 3) % 64] };
-	bgPalettes[1] = { paletteTable[ReadData(0x3F00 + 5) % 64],  paletteTable[ReadData(0x3F00 + 6) % 64],  paletteTable[ReadData(0x3F00 + 7) % 64] };
-	bgPalettes[2] = { paletteTable[ReadData(0x3F00 + 9) % 64],  paletteTable[ReadData(0x3F00 + 10) % 64], paletteTable[ReadData(0x3F00 + 11) % 64] };
-	bgPalettes[3] = { paletteTable[ReadData(0x3F00 + 13) % 64], paletteTable[ReadData(0x3F00 + 14) % 64], paletteTable[ReadData(0x3F00 + 15) % 64] };
+	bgColor =		  paletteTable[paletteRAM[0]];
+	bgPalettes[0] = { paletteTable[paletteRAM[1]],  paletteTable[paletteRAM[2]],  paletteTable[paletteRAM[3]] };
+	bgPalettes[1] = { paletteTable[paletteRAM[5]],  paletteTable[paletteRAM[6]],  paletteTable[paletteRAM[7]] };
+	bgPalettes[2] = { paletteTable[paletteRAM[9]],  paletteTable[paletteRAM[10]], paletteTable[paletteRAM[11]] };
+	bgPalettes[3] = { paletteTable[paletteRAM[13]], paletteTable[paletteRAM[14]], paletteTable[paletteRAM[15]] };
 
-	fgPalettes[0] = { paletteTable[ReadData(0x3F10 + 1) ],  paletteTable[ReadData(0x3F10 + 2) ],  paletteTable[ReadData(0x3F10 + 3) ] };
-	fgPalettes[1] = { paletteTable[ReadData(0x3F10 + 5) ],  paletteTable[ReadData(0x3F10 + 6) ],  paletteTable[ReadData(0x3F10 + 7) ] };
-	fgPalettes[2] = { paletteTable[ReadData(0x3F10 + 9) ],  paletteTable[ReadData(0x3F10 + 10)], paletteTable[ReadData(0x3F10 + 11) ] };
-	fgPalettes[3] = { paletteTable[ReadData(0x3F10 + 13) ], paletteTable[ReadData(0x3F10 + 14) ], paletteTable[ReadData(0x3F10 + 15) ] };
+	fgPalettes[0] = { paletteTable[paletteRAM[17]],  paletteTable[paletteRAM[18]],  paletteTable[paletteRAM[19]] };
+	fgPalettes[1] = { paletteTable[paletteRAM[21]],  paletteTable[paletteRAM[22]],  paletteTable[paletteRAM[23]] };
+	fgPalettes[2] = { paletteTable[paletteRAM[25]],  paletteTable[paletteRAM[26]],  paletteTable[paletteRAM[27]] };
+	fgPalettes[3] = { paletteTable[paletteRAM[29]],  paletteTable[paletteRAM[30]],  paletteTable[paletteRAM[31]] };
 }
