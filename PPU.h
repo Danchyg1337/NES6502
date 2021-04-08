@@ -15,6 +15,12 @@ public:
 	uint8_t fetched;
 	uint8_t data;
 
+	
+	uint8_t scrTileX = 0;
+	uint8_t scrTileY = 0;
+	uint8_t scrPixelX = 0;
+	uint8_t scrPixelY = 0;
+
 	uint8_t scrollX = 0;
 	uint8_t scrollY = 0;
 
@@ -22,6 +28,18 @@ public:
 	uint8_t currentTileY = 0;
 	uint8_t currentPixelX = 0;
 	uint8_t currentPixelY = 0;
+
+
+	struct Tile {
+		uint16_t id;
+		uint8_t LSB[8];
+		uint8_t MSB[8];
+		uint8_t palette;
+	};
+
+	Tile currentTile;
+
+
 
 	enum MIRRORING : uint8_t{
 		HORIZONTAL,
@@ -58,22 +76,13 @@ public:
 	};
 
 	struct Palette {
-		RGB c1;
-		RGB c2;
-		RGB c3;
+		RGB colors[3];
 	};
 
 	RGB bgColor;
 
-	struct Palettes {
-		Palette palette0;
-		Palette palette1;
-		Palette palette2;
-		Palette palette3;
-	};
-
-	Palettes bgPalettes;
-	Palettes fgPalettes;
+	Palette bgPalettes[4];
+	Palette fgPalettes[4];
 
 	std::unordered_map<uint8_t, RGB> paletteTable = {
 		{0,  {84, 84, 84}},	   {1, {0, 30, 116}},	  {2, {8, 16, 144}},     {3, {48, 0, 136}},     {4, {68, 0, 100}},     {5, {92, 0, 48}},      {6, {84, 4, 0}},       {7,  {60, 24, 0}},     {8, {32, 42, 0}},      {9, {8, 58, 0}},       {10, {0, 64, 0}},      {11, {0, 60, 0}},      {12, {0, 50, 60}},     {13, {0, 0, 0}},       {14, {0, 0, 0}}, {15, {0, 0, 0}},
@@ -111,4 +120,7 @@ public:
 	void Write(uint16_t addr, uint8_t value);
 
 	void GetPalette();
+	void GetCurrentChrTile();
+	uint16_t GetCurrentScreenTileAddr();
+	uint8_t GetCurrentTilePalette(uint16_t tileAddr);
 };

@@ -514,54 +514,54 @@ int BasicInitGui (NES *nes_cpu) {
         {
             ImGui::Begin("PALETTES", &show_palette);
 
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette0.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette0.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette0.c1.b/ 255, 1), "*");
+            /*ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[0].colors[0].r/ 255, nes_cpu->PPU2C02.bgPalettes[0].colors[0].g/ 255, nes_cpu->PPU2C02.bgPalettes[0].colors[0].b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette0.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette0.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette0.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[0].colors[2.r/ 255, nes_cpu->PPU2C02.bgPalettes[0.colors[2.g/ 255, nes_cpu->PPU2C02.bgPalettes[0.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette0.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette0.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette0.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[0].colors[3.r/ 255, nes_cpu->PPU2C02.bgPalettes[0.colors[3.g/ 255, nes_cpu->PPU2C02.bgPalettes[0.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette1.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette1.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette1.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[1].colors[1.r/ 255, nes_cpu->PPU2C02.bgPalettes[1.colors[1.g/ 255, nes_cpu->PPU2C02.bgPalettes[1.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette1.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette1.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette1.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[1].colors[2.r/ 255, nes_cpu->PPU2C02.bgPalettes[1.colors[2.g/ 255, nes_cpu->PPU2C02.bgPalettes[1.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette1.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette1.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette1.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[1].colors[3.r/ 255, nes_cpu->PPU2C02.bgPalettes[1.colors[3.g/ 255, nes_cpu->PPU2C02.bgPalettes[1.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette2.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette2.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette2.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[2].colors[1.r/ 255, nes_cpu->PPU2C02.bgPalettes[2.colors[1.g/ 255, nes_cpu->PPU2C02.bgPalettes[2.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette2.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette2.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette2.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[2].colors[2.r/ 255, nes_cpu->PPU2C02.bgPalettes[2.colors[2.g/ 255, nes_cpu->PPU2C02.bgPalettes[2.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette2.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette2.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette2.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[2].colors[3.r/ 255, nes_cpu->PPU2C02.bgPalettes[2.colors[3.g/ 255, nes_cpu->PPU2C02.bgPalettes[2.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette3.c1.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette3.c1.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette3.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[3].colors[1.r/ 255, nes_cpu->PPU2C02.bgPalettes[3.colors[1.g/ 255, nes_cpu->PPU2C02.bgPalettes[3.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette3.c2.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette3.c2.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette3.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[3].colors[2.r/ 255, nes_cpu->PPU2C02.bgPalettes[3.colors[2.g/ 255, nes_cpu->PPU2C02.bgPalettes[3.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes.palette3.c3.r/ 255, nes_cpu->PPU2C02.bgPalettes.palette3.c3.g/ 255, nes_cpu->PPU2C02.bgPalettes.palette3.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.bgPalettes[3].colors[3.r/ 255, nes_cpu->PPU2C02.bgPalettes[3.colors[3.g/ 255, nes_cpu->PPU2C02.bgPalettes[3.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                  
             ImGui::Text("Sprites");                                                                                                                                              
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette0.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette0.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette0.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[0].colors[0].r/ 255, nes_cpu->PPU2C02.fgPalettes[0.colors[1.g/ 255, nes_cpu->PPU2C02.fgPalettes[0.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette0.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette0.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette0.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[0].colors[1].r/ 255, nes_cpu->PPU2C02.fgPalettes[0.colors[2.g/ 255, nes_cpu->PPU2C02.fgPalettes[0.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette0.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette0.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette0.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[0].colors[2].r/ 255, nes_cpu->PPU2C02.fgPalettes[0.colors[3.g/ 255, nes_cpu->PPU2C02.fgPalettes[0.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette1.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette1.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette1.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[1].colors[0].r/ 255, nes_cpu->PPU2C02.fgPalettes[1.colors[1.g/ 255, nes_cpu->PPU2C02.fgPalettes[1.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette1.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette1.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette1.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[1].colors[1].r/ 255, nes_cpu->PPU2C02.fgPalettes[1.colors[2.g/ 255, nes_cpu->PPU2C02.fgPalettes[1.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette1.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette1.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette1.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[1].colors[2].r/ 255, nes_cpu->PPU2C02.fgPalettes[1.colors[3.g/ 255, nes_cpu->PPU2C02.fgPalettes[1.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette2.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette2.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette2.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[2].colors[0].r/ 255, nes_cpu->PPU2C02.fgPalettes[2.colors[1.g/ 255, nes_cpu->PPU2C02.fgPalettes[2.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette2.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette2.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette2.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[2].colors[1].r/ 255, nes_cpu->PPU2C02.fgPalettes[2.colors[2.g/ 255, nes_cpu->PPU2C02.fgPalettes[2.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                  
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette2.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette2.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette2.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[2].colors[2].r/ 255, nes_cpu->PPU2C02.fgPalettes[2.colors[3.g/ 255, nes_cpu->PPU2C02.fgPalettes[2.colors[3.b/ 255, 1), "*");
                                                                                                                                                                                 
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette3.c1.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette3.c1.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette3.c1.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[3].colors[0].r/ 255, nes_cpu->PPU2C02.fgPalettes[3.colors[1.g/ 255, nes_cpu->PPU2C02.fgPalettes[3.colors[1.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette3.c2.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette3.c2.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette3.c2.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[3].colors[1].r/ 255, nes_cpu->PPU2C02.fgPalettes[3.colors[2.g/ 255, nes_cpu->PPU2C02.fgPalettes[3.colors[2.b/ 255, 1), "*");
             ImGui::SameLine();                                                                                                                                                   
-            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes.palette3.c3.r/ 255, nes_cpu->PPU2C02.fgPalettes.palette3.c3.g/ 255, nes_cpu->PPU2C02.fgPalettes.palette3.c3.b/ 255, 1), "*");
+            ImGui::TextColored(ImVec4(nes_cpu->PPU2C02.fgPalettes[3].colors[2].r/ 255, nes_cpu->PPU2C02.fgPalettes[3.colors[3.g/ 255, nes_cpu->PPU2C02.fgPalettes[3.colors[3.b/ 255, 1), "*");*/
 
             ImGui::End();
         }

@@ -11,7 +11,7 @@
 
 int main(int, char**)
 {
-    std::string file_name = "Spelunker.nes";
+    std::string file_name = "Pac-Man(J).nes";
     NES nes;
     if (!nes.LoadRom(file_name)) return 0;
 
