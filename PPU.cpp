@@ -19,6 +19,7 @@ bool PPU::Load(uint8_t* pattern, size_t size) {
 uint16_t PPU::GetCurrentScreenTileAddr() {
 	int16_t finalX = scrTileX + currentTileX;
 	int16_t finalY = scrTileY + currentTileY;
+	uint8_t bank = PPUCTRL & 0x03;
 	switch (mirroringMode)
 	{
 	case MIRRORING::HORIZONTAL:
@@ -27,12 +28,12 @@ uint16_t PPU::GetCurrentScreenTileAddr() {
 		}
 		if (finalY >= 30) {
 			finalY -= 30;
-			if (nametableBank == 0)
+			if (bank == 0)
 				finalX += 0x0400;
 			else
 				finalX -= 0x0400;
 		}
-		finalX += nametableBank * 0x0200;
+		finalX += bank * 0x0200;
 		break;
 	case MIRRORING::VERTICAL:
 		if (finalY >= 30) {
@@ -40,12 +41,12 @@ uint16_t PPU::GetCurrentScreenTileAddr() {
 		}
 		if (finalX >= 32) {
 			finalX -= 32;
-			if (nametableBank == 0)
+			if (bank == 0)
 				finalX += 0x0400;
 			else
 				finalX -= 0x0400;
 		}
-		finalX += nametableBank * 0x0400;
+		finalX += bank * 0x0400;
 		break;
 	}
 
@@ -64,13 +65,29 @@ uint8_t PPU::GetCurrentTilePalette(uint16_t tilePos) {
 void PPU::GetCurrentChrTile() {
 	uint16_t tileAddr = GetCurrentScreenTileAddr();
 	uint16_t tileNum = VRAM[tileAddr];
-	if (BanktoRenderBG) tileNum += 256;
+	if (PPUCTRL & FLAGS::B4) tileNum += 256;
 	tileNum *= 16;
 	if (tileNum == currentTile.id) return;
 	memcpy(currentTile.LSB, &patternTable[tileNum], 8);
 	memcpy(currentTile.MSB, &patternTable[tileNum + 8], 8);
 	currentTile.id = tileNum;
 	currentTile.palette = GetCurrentTilePalette(tileAddr);
+}
+
+void PPU::GetCurrentSprite0Tile() {
+	uint16_t id = OAM[1];
+	if (id == spriteZeroTile.id) return;
+	uint16_t tileNum = id;
+	bool bank = PPUCTRL & FLAGS::B3;
+	if (mode8x16) {
+		tileNum &= ~0x1;
+		bank = tileNum & 0x1;
+	}
+	if (bank) tileNum += 256;
+	tileNum *= 16;
+	memcpy(spriteZeroTile.LSB, &patternTable[tileNum], 8);
+	memcpy(spriteZeroTile.MSB, &patternTable[tileNum + 8], 8);
+	spriteZeroTile.id = id;
 }
 
 void PPU::Step() {
@@ -95,7 +112,6 @@ void PPU::Step() {
 	if (horiLines == 0 && clockCycle == 0) {
 		currentPixelY = currentTileX = currentTileY = 0;
 		clockCycle = currentPixelX = 1;
-
 		GetCurrentChrTile();
 	}
 	if (clockCycle <= 256 && horiLines < 240 && horiLines != -1) {
@@ -117,15 +133,28 @@ void PPU::Step() {
 			pixls[pxlPos + 2] = bgPalettes[currentTile.palette].colors[colorN - 1].b;
 		}
 
-		uint16_t y = OAM[0];
-		uint16_t x = OAM[3];
 
-		if ((PPUMASK & FLAGS::B3) && (PPUMASK & FLAGS::B4) && !(PPUSTATUS & FLAGS::B6) && (horiLines >= y - 1 && horiLines <= y + 7) && (clockCycle >= x && clockCycle <= x + 8)) {
-			if (pixls[pxlPos] == bgColor.r && pixls[pxlPos + 1] == bgColor.g && pixls[pxlPos + 2] == bgColor.b) {
-				PPUSTATUS |= FLAGS::B6;
-				//printf("X: %i, Y: %i, T: %i\n", clockCycle, horiLines, OAM[1]);
+
+
+		GetCurrentSprite0Tile(); 
+		uint8_t y = OAM[0];
+		uint8_t x = OAM[3];
+
+		uint8_t yComp = horiLines - y;
+		uint8_t xComp = clockCycle - x;
+
+		if ((PPUMASK & FLAGS::B3) && (PPUMASK & FLAGS::B4) && !(PPUSTATUS & FLAGS::B6) && (yComp < 8) && (xComp < 8)) {
+			uint8_t l = (spriteZeroTile.LSB[yComp] >> xComp) & 1;
+			uint8_t h = (spriteZeroTile.MSB[yComp] >> xComp) & 1;
+			uint8_t colorN = ((h << 1) | l) & 0x3;
+			if (colorN != 0) {
+				if (pixls[pxlPos] != bgColor.r && pixls[pxlPos + 1] != bgColor.g && pixls[pxlPos + 2] != bgColor.b) {
+					PPUSTATUS |= FLAGS::B6;
+				}
+				pixls[pxlPos] = 255;
+				pixls[pxlPos + 1] = 0;
+				pixls[pxlPos + 2] = 0;
 			}
-			//printf("IN\n");
 		}
 	}
 	if (clockCycle > 340) {
@@ -238,8 +267,9 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 	switch (addr) {
 	case 0x2000:
 		PPUCTRL = value;
+		loopy_temp &= 0xC00;
+		loopy_temp |= (uint16_t(PPUCTRL) & 0x3) << 10;
 		nametableBank = PPUCTRL & 0x03;
-		//printf("BANK %i\n", nametableBank);
 		baseBankAddr = nametableBank * 0x0400;
 		break;
 	case 0x2001:
@@ -255,12 +285,16 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 		break;
 	case 0x2005:
 		if (addrLatch) {
+			loopy_temp |= (value & 0xF8) << 2;
+			loopy_temp |= (value & 0x7) << 12;
 			scrollY = value;
 			scrTileY = scrollY / 8;
 			scrPixelY = scrollY % 8;
 			addrLatch = false;
 		}
 		else {
+			loopy_temp |= value >> 3;
+			Xtile = value & 0x7;
 			scrollX = value;
 			scrTileX = scrollX / 8;
 			scrPixelX = scrollX % 8;
@@ -270,6 +304,9 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 		break;
 	case 0x2006:
 		if (addrLatch) {
+			loopy_temp |= (value & 0x3F) << 8;
+			loopy_temp &= ~0xC000;
+			PPUCTRL &= ~0x03;
 			VRAMaddr = value;
 			VRAMaddr |= uint16_t(PPUADDR) << 8;
 			addrLatch = false;

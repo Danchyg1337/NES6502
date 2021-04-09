@@ -16,6 +16,9 @@ public:
 	uint8_t data;
 
 	
+	uint16_t loopy_temp = 0;
+	uint16_t Xtile = 0;
+
 	uint8_t scrTileX = 0;
 	uint8_t scrTileY = 0;
 	uint8_t scrPixelX = 0;
@@ -38,6 +41,7 @@ public:
 	};
 
 	Tile currentTile;
+	Tile spriteZeroTile;
 
 
 
@@ -121,6 +125,7 @@ public:
 
 	void GetPalette();
 	void GetCurrentChrTile();
+	void GetCurrentSprite0Tile();
 	uint16_t GetCurrentScreenTileAddr();
 	uint8_t GetCurrentTilePalette(uint16_t tileAddr);
 };
