@@ -14,7 +14,6 @@ class CPU {
 
     FILE* log;
 public:
-    std::vector<uint8_t> PRGROM;
 
     long long unsigned int totalClock = 0;
 
@@ -212,7 +211,7 @@ public:
         {0x28, {&CPU::PLP, &CPU::IMP,  "PLP", 1, 4}}
     };
 
-    bool Load(uint8_t* program, size_t size);
+    bool Load();
     void ConnectToNes(NES* nes);
     void NMI();
     void Reset();

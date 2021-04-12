@@ -159,7 +159,7 @@ void RenderForeground(PPU* ppu, uint8_t Y, uint8_t byte1, uint8_t byte2, uint8_t
 }
 
 void CHRdump(PPU* ppu, Shader& fillTexture, GLuint dstFramebuffer, GLuint VAO,uint8_t bank = 0) {
-    if (!ppu || ppu->CHRROM.size() == 0) return;
+    if (!ppu || ppu->patternTable.size() == 0) return;
 
     glBindFramebuffer(GL_FRAMEBUFFER, dstFramebuffer);
     glBindVertexArray(VAO);
@@ -177,7 +177,7 @@ void CHRdump(PPU* ppu, Shader& fillTexture, GLuint dstFramebuffer, GLuint VAO,ui
     GLuint chrBlock;
     glGenBuffers(1, &chrBlock);
     glBindBuffer(GL_UNIFORM_BUFFER, chrBlock);
-    glBufferData(GL_UNIFORM_BUFFER, ppu->CHRROM.size(), ppu->CHRROM.data() + offset, GL_STATIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, ppu->patternTable.size(), ppu->patternTable.data() + offset, GL_STATIC_DRAW);
 
     GLuint dataIndex = glGetUniformBlockIndex(fillTexture.Program, "CHRrom");
     glUniformBlockBinding(fillTexture.Program, dataIndex, 0);
@@ -354,8 +354,7 @@ int BasicInitGui (NES *nes_cpu) {
     GLuint squareVAO, squareVBO;
     GetSquareVAOnVBO(squareVAO, squareVBO);
 
-    ConnectTexture(secondFramebuffer, chrTex);
-    CHRdump(&nes_cpu->PPU2C02, chrDumpShader, secondFramebuffer, squareVAO);
+    
 
     //auto instructionsMap = instructions_dump(&nes_cpu->CPU6502);
 
@@ -363,6 +362,9 @@ int BasicInitGui (NES *nes_cpu) {
     {   
         nes_cpu->Run();
         PassInputs(nes_cpu);
+
+        ConnectTexture(secondFramebuffer, chrTex);
+        CHRdump(&nes_cpu->PPU2C02, chrDumpShader, secondFramebuffer, squareVAO);
 
         ConnectTexture(secondFramebuffer, backgroundTexture);
         //RenderBackground(&nes_cpu->PPU2C02, chrTex, secondFramebuffer, backgroundShader, squareVAO);

@@ -4,9 +4,11 @@
 #include "NES6502.h"
 #include "Defines.h"
 
-bool NES::checkHeader() {
-    if (program[0] != 'N' || program[1] != 'E' || program[2] != 'S' || program[3] != 0x1A) return false;
-    return true;
+uint8_t NES::checkHeader() {
+    bool isNes = false;
+    if (cartridge[0] == 'N' && cartridge[1] == 'E' && cartridge[2] == 'S' && cartridge[3] == 0x1A) isNes = true;
+    if (isNes == true && (cartridge[7] & 0x0C) == 0x08) return 2;
+    return isNes;
 }
 
 bool NES::LoadRom(std::string filename, bool rawcode)
@@ -18,23 +20,45 @@ bool NES::LoadRom(std::string filename, bool rawcode)
         std::cout << "No input file " << filename << std::endl;
         return false;
     }
-    program = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
-    if (checkHeader()) {
-        PRGnum = program[4];
-        CHRnum = program[5];
-        flag6 = program[6];
-        flag7 = program[7];
-        printf("PRG size %i, CHR size %i\nFlag6 %c %c %c %c %c %c %c %c\nFlag7 %c %c %c %c %c %c %c %c\n", PRGnum, CHRnum, BYTE_TO_BINARY(flag6), BYTE_TO_BINARY(flag7));
-        size_t PRGsize = 16384 * PRGnum, CHRsize = 8192 * CHRnum;
-        CPU6502.Load(program.data() + 16, PRGsize);
-        PPU2C02.Load(program.data() + 16 + PRGsize, CHRsize);
-        PPU2C02.mirroringMode = flag6 & 1;
+    cartridge = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
+    uint8_t ines = checkHeader();
+    if (!ines) {
+        printf("Not an iNES file\n");
+        system("pause");
+        return false;
     }
-    else
-        CPU6502.Load(program.data(), program.size());
+    PRGnum      = cartridge[4];
+    CHRnum      = cartridge[5];
+    mirroring   = cartridge[6] & 1;
+    battery     = cartridge[6] & 2;
+    trainer     = cartridge[6] & 4;
+    hw4screen   = cartridge[6] & 8;
+    mapperNumber = (cartridge[7] & 0xF0) | ((cartridge[6] & 0xF0) >> 4);
+    console     = cartridge[7] & 3;
+    if (supportedMappers.find(mapperNumber) == supportedMappers.end()) {
+        printf("Mapper %i is unsupported\n", mapperNumber);
+        system("pause");
+        return false;
+    }
+    
+    switch (mapperNumber) {
+    case 0:
+        mapper = new Mapper;
+        break;
+    case 2:
+        mapper = new UXROM;
+    }
+    
+    printf("iNES v%i\n", ines);
+    printf("PRG size %i * 16384, CHR size %i * 8192\nMirroring %i\nTrainer %i\nAdditional RAM %i\nMapper %i\n", PRGnum, CHRnum, mirroring, trainer, battery, mapperNumber);
+    size_t PRGsize = 16384 * PRGnum, CHRsize = 8192 * CHRnum;
+    PPU2C02.Load(cartridge.data() + 16 + (trainer ? 512 : 0) + PRGsize, CHRsize);
     CPU6502.ConnectToNes(this);
     PPU2C02.ConnectToNes(this);
+    mapper->Load(cartridge.data() + 16 + (trainer ? 512 : 0), PRGsize);
+    CPU6502.Load();
     DMAOAM.resize(0x0100);
+    PPU2C02.mirroringMode = mirroring;
     return true;
 }
 
@@ -69,13 +93,11 @@ uint8_t& NES::ReadPPU(uint16_t addr) {
         return PPU2C02.Read(addr);
     }
     else if (addr >= 0x2008 && addr < 0x4000) {
-        //return PPU2C02.GetRegister((addr - 0x2000) % 0x0008);
         return PPU2C02.Read(addr);
     }
 }
 
 void NES::WritePPU(uint16_t addr, uint8_t value) {
-    //printf("PPUWRITE %04X, %02X\n", addr, value);
     if ((addr >= 0x2000 && addr < 0x2008) || addr == 0x4014) {
         PPU2C02.Write(addr, value);
     }

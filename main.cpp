@@ -5,13 +5,14 @@
 #include "PPU.h"
 #include "CPU.h"
 #include "NES6502.h"
+#include "Mapper.h"
 
 #include "gui.h"
 
 
 int main(int, char**)
 {
-    std::string file_name = "Kung Fu.nes";
+    std::string file_name = "Megaman.nes";
     NES nes;
     if (!nes.LoadRom(file_name)) return 0;
 

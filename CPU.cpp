@@ -4,10 +4,8 @@
 #include "NES6502.h"
 #include "Defines.h"
 
-bool CPU::Load(uint8_t* program, size_t size) {
+bool CPU::Load() {
     memory = new uint8_t[0x10000];
-    PRGROM.resize(size);
-    memcpy(PRGROM.data(), program, size);
     Reset();
     if (LOGGER) {
         fopen_s(&log, "CPUlog.txt", "w");
@@ -166,9 +164,7 @@ uint8_t& CPU::Read(uint16_t addr) {
     }
     //PRG-ROM
     else if (addr >= 0x8000 && addr <= 0xFFFF) {
-        if (PRGROM.size() > 0x4000)
-            return PRGROM[addr - 0x8000];
-        return PRGROM[(addr - 0x8000) % 0x4000];
+        return nes->mapper->Read(addr);
     }
 }
 
@@ -213,7 +209,7 @@ void CPU::Write(uint16_t addr, uint8_t value) {
     }
     //PRG-ROM
     else if (addr >= 0x8000 && addr < 0xFFFF) {
-        //ROM is Read-Only
+        nes->mapper->Write(addr, value);
     }
 }
 

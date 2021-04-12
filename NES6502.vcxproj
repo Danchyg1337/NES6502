@@ -198,6 +198,7 @@
   <ItemGroup>
     <ClCompile Include="CPU.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Mapper.cpp" />
     <ClCompile Include="NES6502.cpp" />
     <ClCompile Include="PPU.cpp" />
   </ItemGroup>
@@ -205,6 +206,7 @@
     <ClInclude Include="CPU.h" />
     <ClInclude Include="Defines.h" />
     <ClInclude Include="gui.h" />
+    <ClInclude Include="Mapper.h" />
     <ClInclude Include="NES6502.h" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
