@@ -15,6 +15,8 @@ class CPU {
     FILE* log;
 public:
 
+    std::vector<std::string> callStack;
+
     long long unsigned int totalClock = 0;
 
     uint16_t clockCycle = 0;

@@ -3,16 +3,11 @@
 #include "PPU.h"
 #include "NES6502.h"
 
-bool PPU::Load(uint8_t* pattern, size_t size) {
+bool PPU::Load() {
 	OAM.resize(0x0100, 0);
 	paletteRAM.resize(0x20, 0);
 	VRAM.resize(0x0800, 0);
-	patternTable.resize(0x2000, 0);
 	ATtoRender.resize(0x80, 0);
-	CHRROM.resize(size);
-	memcpy(CHRROM.data(), pattern, size);
-	memcpy(patternTable.data(), pattern, 0x2000);
-	if(CHRROM.size()) GetCurrentChrTile();
 	return true;
 }
 
@@ -44,8 +39,8 @@ void PPU::GetCurrentChrTile() {
 	if (PPUCTRL & FLAGS::B4) tileNum += 256;
 	tileNum *= 16;
 	if (tileNum == currentTile.id) return;
-	memcpy(currentTile.LSB, &patternTable[tileNum], 8);
-	memcpy(currentTile.MSB, &patternTable[tileNum + 8], 8);
+	memcpy(currentTile.LSB, &nes->mapper->PPURead(tileNum), 8);
+	memcpy(currentTile.MSB, &nes->mapper->PPURead(tileNum + 8), 8);
 	currentTile.id = tileNum;
 	currentTile.palette = GetCurrentTilePalette(tileAddr);
 }
@@ -61,8 +56,8 @@ void PPU::GetCurrentSprite0Tile() {
 	}
 	if (bank) tileNum += 256;
 	tileNum *= 16;
-	memcpy(spriteZeroTile.LSB, &patternTable[tileNum], 8);
-	memcpy(spriteZeroTile.MSB, &patternTable[tileNum + 8], 8);
+	memcpy(spriteZeroTile.LSB, &nes->mapper->PPURead(tileNum), 8);
+	memcpy(spriteZeroTile.MSB, &nes->mapper->PPURead(tileNum + 8), 8);
 	spriteZeroTile.id = id;
 }
 
@@ -82,6 +77,7 @@ void PPU::Step() {
 
 	frameIsReady = false;
 	if (horiLines == -1 && clockCycle == 1) {
+		std::fill_n(pixls, pixlsSize, 0);
 		PPUSTATUS &= ~FLAGS::B7;
 		PPUSTATUS &= ~FLAGS::B6;
 	}
@@ -94,21 +90,25 @@ void PPU::Step() {
 		int32_t pxlPos = horiLines * 768 + clockCycle * 3 - scrPixelX * 3 - scrPixelY * 768;
 		if(pxlPos < 0) pxlPos = 0;
 
-		uint8_t l = currentTile.LSB[currentPixelY] >> (7 - currentPixelX) & 1;
-		uint8_t h = currentTile.MSB[currentPixelY] >> (7 - currentPixelX) & 1;
-		uint8_t colorN = ((h << 1) | l) & 0x3;
+		bool opaque = false;
+		if (PPUMASK & FLAGS::B4) {
+			uint8_t l = currentTile.LSB[currentPixelY] >> (7 - currentPixelX) & 1;
+			uint8_t h = currentTile.MSB[currentPixelY] >> (7 - currentPixelX) & 1;
+			uint8_t colorN = ((h << 1) | l) & 0x3;
 
-		if (!colorN) {
-			pixls[pxlPos] =		bgColor.r;
-			pixls[pxlPos + 1] = bgColor.g;
-			pixls[pxlPos + 2] = bgColor.b;
-		}
-		else {
-			pixls[pxlPos] =		bgPalettes[currentTile.palette].colors[colorN - 1].r;
-			pixls[pxlPos + 1] = bgPalettes[currentTile.palette].colors[colorN - 1].g;
-			pixls[pxlPos + 2] = bgPalettes[currentTile.palette].colors[colorN - 1].b;
-		}
 
+			if (!colorN) {
+				pixls[pxlPos] = bgColor.r;
+				pixls[pxlPos + 1] = bgColor.g;
+				pixls[pxlPos + 2] = bgColor.b;
+			}
+			else {
+				pixls[pxlPos] = bgPalettes[currentTile.palette].colors[colorN - 1].r;
+				pixls[pxlPos + 1] = bgPalettes[currentTile.palette].colors[colorN - 1].g;
+				pixls[pxlPos + 2] = bgPalettes[currentTile.palette].colors[colorN - 1].b;
+				opaque = true;
+			}
+		}
 		GetCurrentSprite0Tile(); 
 		uint8_t y = OAM[0];
 		uint8_t x = OAM[3];
@@ -121,12 +121,14 @@ void PPU::Step() {
 			uint8_t h = (spriteZeroTile.MSB[yComp] >> (7 - xComp)) & 1;
 			uint8_t colorN = ((h << 1) | l) & 0x3;
 			if (colorN != 0) {
-				if (pixls[pxlPos] != bgColor.r && pixls[pxlPos + 1] != bgColor.g && pixls[pxlPos + 2] != bgColor.b) {
+				if (opaque) {
 					PPUSTATUS |= FLAGS::B6;
 				}
-				//pixls[pxlPos] = 255;
-				//pixls[pxlPos + 1] = 0;
-				//pixls[pxlPos + 2] = 0;
+				if (showZhit) {
+					pixls[pxlPos] = 255;
+					pixls[pxlPos + 1] = 0;
+					pixls[pxlPos + 2] = 0;
+				}
 			}
 		}
 	}
@@ -139,10 +141,10 @@ void PPU::Step() {
 		GetCurrentChrTile();
 		if (horiLines > 260) {
 			horiLines = -1;
-			VRAMtoRender = std::vector<uint8_t>(VRAM.begin(), VRAM.begin() + 0x03C0);
-			VRAMtoRender.insert(VRAMtoRender.end(), VRAM.begin() + 0x0400, VRAM.begin() + 0x0400 + 0x03C0);
-			ATtoRender = std::vector<uint8_t>(VRAM.begin() + 0x03C0, VRAM.begin() + 0x03C0 + 64);
-			ATtoRender.insert(ATtoRender.end(), VRAM.begin() + 0x0400 + 0x03C0, VRAM.begin() + 0x0400 +0x03C0 + 64);
+			//VRAMtoRender = std::vector<uint8_t>(VRAM.begin(), VRAM.begin() + 0x03C0);
+			//VRAMtoRender.insert(VRAMtoRender.end(), VRAM.begin() + 0x0400, VRAM.begin() + 0x0400 + 0x03C0);
+			//ATtoRender = std::vector<uint8_t>(VRAM.begin() + 0x03C0, VRAM.begin() + 0x03C0 + 64);
+			//ATtoRender.insert(ATtoRender.end(), VRAM.begin() + 0x0400 + 0x03C0, VRAM.begin() + 0x0400 +0x03C0 + 64);
 			mode8x16	   = PPUCTRL & FLAGS::B5;
 			BanktoRenderBG = PPUCTRL & FLAGS::B4;
 			BanktoRenderFG = PPUCTRL & FLAGS::B3;
@@ -195,7 +197,7 @@ uint8_t& PPU::Read(uint16_t addr) {
 
 uint8_t PPU::ReadData(uint16_t addr) {
 	if (addr < 0x2000) {
-		return patternTable[addr];
+		return nes->mapper->PPURead(addr);
 	}
 	if (addr >= 0x2000 && addr < 0x3000) {
 		uint16_t mirrAddr = addr & 0x0FFF;
@@ -217,7 +219,7 @@ uint8_t PPU::ReadData(uint16_t addr) {
 
 void PPU::WriteData(uint16_t addr, uint8_t value) {
 	if (addr < 0x2000) {
-		patternTable[addr] = value;
+		nes->mapper->PPUWrite(addr, value);
 	}
 	if (addr >= 0x2000 && addr < 0x3000) {
 		uint16_t mirrAddr = addr & 0x0FFF;
@@ -251,10 +253,11 @@ void PPU::Write(uint16_t addr, uint8_t value) {
 	case 0x2002:
 		break;
 	case 0x2003:
-
+		OAMaddr = value;
 		break;
-	case 0x2004:
-
+	case 0x2004:				//not complete
+		OAM[OAMaddr] = value;
+		OAMADDR++;
 		break;
 	case 0x2005:
 		if (addrLatch) {

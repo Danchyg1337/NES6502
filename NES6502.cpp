@@ -46,17 +46,24 @@ bool NES::LoadRom(std::string filename, bool rawcode)
         mapper = new Mapper;
         break;
     case 2:
+    case 94:
+    case 180:
         mapper = new UXROM;
+        break;
+    case 3:
+        mapper = new CNROM;
+        break;
     }
     
     printf("iNES v%i\n", ines);
-    printf("PRG size %i * 16384, CHR size %i * 8192\nMirroring %i\nTrainer %i\nAdditional RAM %i\nMapper %i\n", PRGnum, CHRnum, mirroring, trainer, battery, mapperNumber);
+    printf("PRG size %i * 16384, CHR size %i * 8192\nMirroring %i\nTrainer %i\nAdditional RAM %i\nMapper %s\n", PRGnum, CHRnum, mirroring, trainer, battery, supportedMappers[mapperNumber].data());
     size_t PRGsize = 16384 * PRGnum, CHRsize = 8192 * CHRnum;
-    PPU2C02.Load(cartridge.data() + 16 + (trainer ? 512 : 0) + PRGsize, CHRsize);
     CPU6502.ConnectToNes(this);
     PPU2C02.ConnectToNes(this);
-    mapper->Load(cartridge.data() + 16 + (trainer ? 512 : 0), PRGsize);
+    mapper->LoadPRG(cartridge.data() + 16 + (trainer ? 512 : 0), PRGsize);
+    mapper->LoadCHR(cartridge.data() + 16 + (trainer ? 512 : 0) + PRGsize, CHRsize);
     CPU6502.Load();
+    PPU2C02.Load();
     DMAOAM.resize(0x0100);
     PPU2C02.mirroringMode = mirroring;
     return true;
@@ -83,7 +90,8 @@ void NES::Frame() {
 
 void NES::Run() {
     if (running) {
-        //std::this_thread::sleep_for(std::chrono::nanoseconds(delay));
+        float add = ((1000.f / targetFPS) - (currentDT * 1000.f)) * 2.;
+        std::this_thread::sleep_for(std::chrono::milliseconds(long(add))); 
         Frame();
     }
 }

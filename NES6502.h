@@ -28,13 +28,18 @@ public:
     std::vector<uint8_t> cartridge;
     bool running = false;
 
-    int delay = 100;
+    unsigned int delay = 100;
+    int targetFPS = 60;
+    float currentMS = 1;
+    float currentDT = 1;
+    unsigned int currentFPS = 500;
 
     uint16_t clockCycle = 0;
 
     std::unordered_map<uint16_t, std::string> supportedMappers = {
-        {0,   "Mapper Zero / No mapper"},
+        {0,   "Zero / No mapper"},
         {2,   "UxROM"},
+        {3,   "CNROM"},
         {94,  "UxROM"},
         {180, "UxROM"},
     };

@@ -18,18 +18,17 @@ uniform vec3 bgColor;
 uniform vec3 palettes[12];
 uniform uint tilesWidth;
 uniform uint tilesHeight;
-uniform sampler2D chrTex;
 uniform sampler2D bgTex;
 uniform uint spriteX;
 uniform uint spriteY;
-uniform uint spriteTile;
 uniform uint tilePalette;
-uniform bool bank;
 uniform bool depth;
 uniform bool flipH;
 uniform bool flipV;
 uniform bool behindBG;
 uniform bool mode8x16;
+
+uniform uint tile[8];
 
 
 void main () {
@@ -43,29 +42,31 @@ void main () {
 
 	uint onY2 = uint(spritePosY - spriteY) / 8U;
 
-	uint value = spriteTile;
-	if(mode8x16 && flipV) value++;
-	if(bank) value += 256U;
-
-
 	Frag_color = texture(bgTex, texPos);
 	if(Frag_color.rgb != bgColor && behindBG) return;
 
 	if(onX && onY){
-		if(bool(onY2) && mode8x16){
-			if(flipV)
-				value--;
-			else
-				value++;
-			spritePosY -= 8;
+		uint tilePixX = uint(spritePosX - spriteX);
+		uint tilePixY = uint(spritePosY - spriteY);
+		
+		uint side = (tilePixY / 4U) % 2U;
+		
+		if(mode8x16){
+			if(flipV && !bool(onY2)) side+=4U;
+			else if(!flipV && bool(onY2)) side += 4U;
 		}
-		float tileX = (value % tilesWidth + abs((int(flipH) * 8 - (spritePosX - spriteX)) / 8)) / tilesWidth;
-		float tileY = (value / tilesWidth + abs((int(flipV) * 8 - (spritePosY - spriteY)) / 8)) / tilesHeight;
-		vec4 tileColor = texture(chrTex, vec2(tileX, tileY));
+		uint shift = (flipV ? 3U - tilePixY % 4U : tilePixY % 4U) * 8U;
 
-		if(tileColor.r == 1.) Frag_color = vec4(palettes[tilePalette * 3U] / 255, 1);
-		else if(tileColor.g == 1.) Frag_color = vec4(palettes[tilePalette * 3U + 1U] / 255, 1);
-		else if(tileColor.b == 1.) Frag_color = vec4(palettes[tilePalette * 3U + 2U] / 255, 1);
-		//else Frag_color = vec4(bgColor / 255, 1);
+		
+		uint LSB = tile[flipV ? 1U - side : side] >> shift;
+		LSB = (LSB >> (flipH ? tilePixX : 7U - tilePixX)) & 1U;
+
+		uint MSB = tile[(flipV ? 1U - side: side) + 2U] >> shift;
+		MSB = (MSB >> (flipH ? tilePixX : 7U - tilePixX)) & 1U;
+		
+		uint colorNum = (MSB << 1U) | LSB;
+
+		if(colorNum != 0U)
+			Frag_color = vec4(palettes[tilePalette * 3U + colorNum - 1U] / 255, 1);
 	}
 }

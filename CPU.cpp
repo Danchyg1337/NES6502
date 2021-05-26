@@ -164,7 +164,7 @@ uint8_t& CPU::Read(uint16_t addr) {
     }
     //PRG-ROM
     else if (addr >= 0x8000 && addr <= 0xFFFF) {
-        return nes->mapper->Read(addr);
+        return nes->mapper->CPURead(addr);
     }
 }
 

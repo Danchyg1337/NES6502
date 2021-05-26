@@ -38,23 +38,16 @@ void main () {
 	uint int32indexX = uint(fract(fractX) * 8.0);	   // 0..7
 	uint int32indexY = uint(fract(fractY * 2.) * 4.0); // 0..3
 
-
-	uint a[4];
-	a[0] = 0U;
-	a[1] = 8U;
-	a[2] = 16U;
-	a[3] = 24U;
-
 	uint finalPos = ((relPosY * 4U * uint(width)) + relPosX * 4U) + fractINT_Y;		//final position in the data array;
 	uint lowByte = finalPos, highByte = finalPos + 2U;
 
 	uint data_low = data.val[lowByte];
-	data_low = (data_low >> a[int32indexY]);
-	data_low = (data_low & (1U << (7U - int32indexX))) >> (7U - int32indexX);
+	data_low = (data_low >> (int32indexY * 8U));
+	data_low = (data_low >> 7U - int32indexX) & 1U;
 
 	uint data_hig = data.val[highByte];
-	data_hig = (data_hig >> a[int32indexY]);
-	data_hig = (data_hig & (1U << (7U - int32indexX))) >> (7U - int32indexX);
+	data_hig = (data_hig >> (int32indexY * 8U));
+	data_hig = (data_hig >> 7U - int32indexX) & 1U;
 
 	uint MSB = (data_hig << 1U) | data_low;
 

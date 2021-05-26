@@ -50,21 +50,21 @@ public:
 		VERTICAL
 	};
 
-
-	uint8_t* pixls = new uint8_t[187320];			//test
+	size_t pixlsSize = 187320;
+	uint8_t* pixls = new uint8_t[pixlsSize];			//test
 
 	uint8_t mirroringMode = MIRRORING::HORIZONTAL;
 
+	uint8_t  OAMaddr = 0x0;
 	uint16_t VRAMaddr = 0x0;
 	uint16_t baseBankAddr = 0x0;
 	bool addrLatch = false;
 
 	bool frameIsReady = false;
 
+	bool showZhit = false;
 	std::vector<uint8_t> OAM;
-	std::vector<uint8_t> CHRROM;
 	std::vector<uint8_t> paletteRAM;
-	std::vector<uint8_t> patternTable;
 	std::vector<uint8_t> VRAM;
 	std::vector<uint8_t> VRAMtoRender;
 	std::vector<uint8_t> ATtoRender;		
@@ -116,7 +116,7 @@ public:
 		B7 = 128
 	};
 
-	bool Load(uint8_t* pattern, size_t size);
+	bool Load();
 	void Step();
 	void Reset();
 	void ConnectToNes(NES* nes);

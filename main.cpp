@@ -12,11 +12,12 @@
 
 int main(int, char**)
 {
-    std::string file_name = "Megaman.nes";
+    std::string game_name = "Milon's Secret Castle.nes";
+    std::string file_name = "Games/" + game_name;
     NES nes;
     if (!nes.LoadRom(file_name)) return 0;
 
-    BasicInitGui(&nes); 
+    BasicInitGui(&nes, game_name);
 
     return 0;
 }
